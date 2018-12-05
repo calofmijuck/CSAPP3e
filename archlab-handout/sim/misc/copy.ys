@@ -1,0 +1,51 @@
+# 2017-18570 Sungchan Yi
+
+# Initial code
+	irmovq Stack,%rsp
+	irmovq $6,%rdx
+	irmovq dest,%rsi
+	irmovq src,%rdi
+	call copy_block
+	halt
+
+.align 8
+# Source array
+src:
+	.quad 0x00a
+	.quad 0x0b0
+	.quad 0xc00
+	.quad 0x00d
+	.quad 0x0e0
+	.quad 0xf00
+
+# Destination array
+dest:
+	.quad 0x111
+	.quad 0x222
+	.quad 0x333
+	.quad 0x444
+	.quad 0x555
+	.quad 0x666
+
+# long copy_block(long *src, long *dest, long len)
+# src in %rdi, dest in %rsi, len in %rdx
+copy_block:
+	# FILL IN HERE
+	xorq %rax, %rax				# result = 0
+	irmovq $0x8, %r8
+	irmovq $0x1, %r9
+	jmp check					# check condition
+loop:
+	mrmovq (%rdi), %rcx			# val = *src
+	addq %r8, %rdi				# src++
+	rmmovq %rcx, (%rsi)			# *dest = val
+	addq %r8, %rsi				# dest++
+	xorq %rcx, %rax				# result ^= val
+	subq %r9, %rdx				# len--
+check:
+	andq %rdx, %rdx				# len == 0 ?
+	jne loop					# goto loop
+	ret			# Return
+
+.pos 0x100
+Stack:

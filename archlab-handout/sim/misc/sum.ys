@@ -1,0 +1,46 @@
+# 2017-18570 Sungchan Yi
+
+# Initial code
+	irmovq Stack,%rsp
+	irmovq ele1, %rdi
+	call sum_list
+	halt
+
+# Sample linked list
+.align 8
+ele1:
+	.quad 0x00a
+	.quad ele2
+ele2:
+	.quad 0x0b0
+	.quad ele3
+ele3:
+	.quad 0xc00
+	.quad 0
+ele4:
+	.quad 0xd000
+	.quad ele5
+ele5:
+	.quad 0xfffffffffffff347
+	.quad 0
+
+# long sum_list(list_ptr ls)
+# ls in %rdi
+sum_list:
+	xorq %rax,%rax          # val = 0
+	andq %rdi,%rdi		# ls == 0?
+	je done			# Yes, goto done
+loop:
+	# FILL IN HERE
+	irmovq $0x8,%rdx
+	mrmovq (%rdi), %rsi
+	addq %rsi,%rax
+	addq %rdx,%rdi
+	mrmovq (%rdi), %rdi
+	andq %rdi,%rdi
+	jne loop	        # If null, goto done
+	# restore values of the register
+done:	ret			# return
+
+.pos 0x100
+Stack:

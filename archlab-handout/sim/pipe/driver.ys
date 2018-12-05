@@ -1,0 +1,244 @@
+#######################################################################
+# Test for copying block of size 2;
+#######################################################################
+	.pos 0
+main:	irmovq Stack, %rsp  	# Set up stack pointer
+
+	# Set up arguments for copy function and then invoke it
+	irmovq $2, %rdx		# src and dst have 2 elements
+	irmovq dest, %rsi	# dst array
+	irmovq src, %rdi	# src array
+	call ncopy		 
+	call check	        # Call checker code
+	halt                    # should halt with 0xaaaa in %rax
+StartFun:
+#/* $begin ncopy-ys */
+##################################################################
+# ncopy.ys - Copy a src block of len words to dst.
+# Return the number of positive words (>0) contained in src.
+#
+# Include your name and ID here.
+#
+# Insert iaddq if possible
+# Loop unrolling - 4 elements at a time.
+#
+##################################################################
+# Do not modify this portion
+# Function prologue.
+# %rdi = src, %rsi = dst, %rdx = len
+ncopy:
+
+##################################################################
+# You can modify this portion
+# Loop header
+	xorq %rax,%rax		# count = 0;
+	andq %rdx,%rdx		# len <= 0?
+	jle Done			# if so, goto Done:
+
+Loop:
+	iaddq $-4, %rdx			# len -= 4
+	jge L1					# start loop
+	jmp Rem					# Take care of remaining elements
+
+L1:
+	mrmovq (%rdi), %r10		# read val1 from src
+	mrmovq $8(%rdi), %r11	# read val2 from src + 8
+	rmmovq %r10, (%rsi) 	# store val1 to dest
+	andq %r10, %r10			# val1 > 0 ?
+	jle L2
+	iaddq $1, %rax			# count++
+
+L2:
+	mrmovq $16(%rdi), %r10
+	rmmovq %r11, $8(%rsi)
+	andq %r11, %r11
+	jle L3
+	iaddq $1, %rax
+
+L3:
+	mrmovq $24(%rdi), %r11
+	rmmovq %r10, $16(%rsi)
+	andq %r10, %r10
+	jle L4
+	iaddq $1, %rax
+
+L4:
+	rmmovq %r11, $24(%rsi)
+	andq %r11, %r11
+	jle Npos
+	iaddq $1, %rax
+
+Npos:					# various updates happen here
+	iaddq $32, %rdi		# src++
+	iaddq $32, %rsi		# dst++
+	jmp Loop			# if so, goto Loop:
+
+Rem:
+	iaddq $4, %rdx
+	je Done
+	iaddq $-1, %rdx
+	je JT1
+	iaddq $-1, %rdx
+	je JT2
+	iaddq $-1, %rdx
+	je JT3
+	# addq %rdx, %rdx
+	# addq %rdx, %rdx
+	# addq %rdx, %rdx
+	# jge JTSt(%rdx)
+	jmp Done
+
+JT3:
+	mrmovq $16(%rdi), %r10
+	rmmovq %r10, $16(%rsi)
+	andq %r10, %r10
+	jle JT2
+	iaddq $1, %rax
+
+JT2:
+	mrmovq $8(%rdi), %r10
+	rmmovq %r10, $8(%rsi)
+	andq %r10, %r10
+	jle JT1
+	iaddq $1, %rax
+
+JT1:
+	mrmovq (%rdi), %r10
+	rmmovq %r10, (%rsi)
+	andq %r10, %r10
+	jle Done
+	iaddq $1, %rax
+
+
+# Jump Table
+JTSt:
+	.quad JT3
+	.quad JT2
+	.quad JT1
+
+
+##################################################################
+# Do not modify the following section of code
+# Function epilogue.
+Done:
+	ret
+##################################################################
+
+
+# Keep the following label at the end of your function
+End:
+#/* $end ncopy-ys */
+EndFun:
+#################################################################### 
+# Epilogue code for the correctness testing driver
+####################################################################
+
+# This is the correctness checking code.
+# It checks:
+#   1. %rax has 0.  Set %rax to 0xbbbb if not.
+#   2. The total length of the code is less than or equal to 1000.
+#      Set %rax to 0xcccc if not.
+#   3. The source data was copied to the destination.
+#      Set %rax to 0xdddd if not.
+#   4. The words just before and just after the destination region
+#      were not corrupted.  Set %rax to 0xeeee if not.
+# If all checks pass, then sets %rax to 0xaaaa
+check:
+	# Return value test
+	irmovq $0,%r10
+	subq %r10,%rax
+	je checkb
+	irmovq $0xbbbb,%rax  # Failed test #1
+	jmp cdone
+checkb:
+	# Code length check
+	irmovq EndFun,%rax
+	irmovq StartFun,%rdx
+	subq %rdx,%rax
+	irmovq $1000,%rdx
+	subq %rax,%rdx
+	jge checkm
+	irmovq $0xcccc,%rax  # Failed test #2
+	jmp cdone
+checkm:
+	irmovq dest, %rdx # Pointer to next destination location
+	irmovq src,%rbx   # Pointer to next source location
+	irmovq $2,%rdi  # Count
+	andq %rdi,%rdi
+	je checkpre         # Skip check if count = 0
+mcloop:
+	mrmovq (%rdx),%rax
+	mrmovq (%rbx),%rsi
+	subq %rsi,%rax
+	je  mok
+	irmovq $0xdddd,%rax # Failed test #3
+	jmp cdone
+mok:
+	irmovq $8,%rax
+	addq %rax,%rdx	  # dest ++
+	addq %rax,%rbx    # src++
+	irmovq $1,%rax
+	subq %rax,%rdi    # cnt--
+	jg mcloop
+checkpre:
+	# Check for corruption
+	irmovq Predest,%rdx
+	mrmovq (%rdx), %rax  # Get word before destination
+	irmovq $0xbcdefa, %rdx
+	subq %rdx,%rax
+	je checkpost
+	irmovq $0xeeee,%rax  # Failed test #4
+	jmp cdone
+checkpost:
+	# Check for corruption
+	irmovq Postdest,%rdx
+	mrmovq (%rdx), %rax  # Get word after destination
+	irmovq $0xdefabc, %rdx
+	subq %rdx,%rax
+	je checkok
+	irmovq $0xeeee,%rax # Failed test #4
+	jmp cdone
+checkok:
+	# Successful checks
+	irmovq $0xaaaa,%rax
+cdone:
+	ret
+
+###############################
+# Source and destination blocks 
+###############################
+	.align 8
+src:
+	.quad -1
+	.quad -2
+	.quad 0xbcdefa # This shouldn't get moved
+
+	.align 16
+Predest:
+	.quad 0xbcdefa
+dest:
+	.quad 0xcdefab
+	.quad 0xcdefab
+Postdest:
+	.quad 0xdefabc
+
+.align 8
+# Run time stack
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+
+Stack:
