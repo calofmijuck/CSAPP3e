@@ -63,12 +63,90 @@ cache make_cache(long long setNum, int lineNum, long long size) {
     return ret;
 }
 
+void clean(cache CACHE, long long setNum, int lineNum, long long size) {
+    for(int s = 0; s < setNum; ++s) {
+        // cache_set set = CACHE.sets[s];
+        if(CACHE.sets[s].lines != NULL) free(CACHE.sets[s].lines);
+    }
+    if(CACHE.sets != NULL) free(CACHE.sets);
+}
+
+int LRU(cache_set SET, cache_param param, int* used) {
+    int ret = 0;
+    cache_line line;
+    int max = SET.lines[0].access, min = max;
+    for(int lidx = 1; lidx < param.E; ++lidx) {
+        line = SET.lines[lidx];
+        if(line.access < min) {
+            ret = lidx;
+            min = line.access;
+        }
+        if(line.access > max) max = line.access;
+    }
+    used[0] = min;
+    used[1] = max;
+    return ret;
+}
+
+int emptyLine(cache_set SET, cache_param param) {
+    cache_line line;
+    for(int i = 0; i < param.E; ++i) {
+        line = SET.lines[i];
+        if(!line.valid) return i;
+    }
+    return 0; // no empty line
+}
+
+// cache simulator
+cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
+    int tagsize = 64 - param.s - param.b, lineNum = param.E, prev = param.hits;
+    int full = 1; // All lines full
+
+    // parse input
+    unsigned long long setIdx = (addr << tagsize) >> (tagsize + param.b);
+    memAddress inputTag = addr >> (param.s + param.b);
+
+    // look for set
+    cache_set search = CACHE.sets[setIdx];
+
+    for(int lidx = 0; lidx < lineNum; ++lidx) {
+        cache_line line = search.lines[lidx];
+        if(line.valid) {
+            if(line.tag == inputTag) { // cache hit
+                ++line.access;
+                ++param.hits;
+                search.lines[lidx] = line;
+            }
+        } else if(!(line.valid) && full) full = 0;
+    }
+    if(prev == param.hits) ++param.misses; // cache miss
+    else return param; // cache hit - just return
+
+    // cache miss : replacement policy LRU / write to empty line
+    int* used = (int*) malloc(sizeof(int) * 2);
+    int lruIdx = LRU(search, param, used);
+
+    if(full) { // evict and overwrite
+        ++param.evicts;
+        search.lines[lruIdx].tag = inputTag;
+        search.lines[lruIdx].access = used[1] + 1;
+    } else { // write in empty line
+        int emptyIdx = emptyLine(search, param);
+        search.lines[emptyIdx].tag = inputTag;
+        search.lines[emptyIdx].valid = 1;
+        search.lines[emptyIdx].access = used[1] + 1;
+    }
+
+    free(used); // don't forget to free
+    return param;
+}
+
+
 int main(int argc, char** argv) {
     cache_param param;
     cache CACHE;
     memset(&param, 0, sizeof(param));
     // malloc(sizeof(param));
-    // printSummary(0, 0, 0);
 
     FILE *read_trace;
     char op;
@@ -116,9 +194,31 @@ int main(int argc, char** argv) {
 
     CACHE = make_cache(sets, param.E, block);
     read_trace = fopen(trace_file, "r"); // read
+    if(read_trace == NULL) return 0;
 
     // read file and execute
-    // TODO
+    while(fscanf(read_trace, " %c %llx,%d", &op, &addr, &size) == 3) {
+        switch(op) {
+            case 'I': // instruction load
+                break;
+            case 'L': // data load
+                param = simulate(CACHE, param, addr);
+                break;
+            case 'S': // data store
+                param = simulate(CACHE, param, addr);
+                break;
+            case 'M': // data modify
+                param = simulate(CACHE, param, addr);
+                param = simulate(CACHE, param, addr);
+                break;
+            default:
+                break;
+        }
+    }
+
+    printSummary(param.hits, param.misses, param.evicts);
+    clean(CACHE, sets, param.E, block); // free memory
+    fclose(read_trace); // remember to close file
 
     return 0;
 }
