@@ -118,7 +118,7 @@ cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
     int full = 1; // All lines full
 
     // parse input
-    unsigned long long setIdx = (unsigned long long) (addr << tagsize) >> (tagsize + param.b);
+    unsigned long long setIdx = (addr << tagsize) >> (tagsize + param.b);
     memAddress inputTag = addr >> (param.s + param.b);
 
     // look for set
@@ -207,7 +207,7 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    long long sets = 1 << param.S; // number of sets
+    long long sets = 1 << param.s; // number of sets
     long long block = 1 << param.b; // number of blocks
     param.hits = 0;
     param.misses = 0;
