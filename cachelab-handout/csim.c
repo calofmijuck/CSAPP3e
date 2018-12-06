@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
-#include <string.h>
 #include "cachelab.h"
 
 typedef unsigned long long memAddress; // 64-bit data to hold memory addresses
@@ -41,7 +40,6 @@ typedef struct {
 
 // create cache
 cache make_cache(long long setNum, int lineNum, long long size) {
-    printf("make_cache called\n");
     cache ret;
     cache_set set;
     cache_line line;
@@ -61,13 +59,10 @@ cache make_cache(long long setNum, int lineNum, long long size) {
             set.lines[lidx] = line;
         }
     }
-    printf("Returning Safely :)\n");
     return ret;
 }
 
 void clean(cache CACHE, long long setNum, int lineNum, long long size) {
-    printf("clean called\n");
-
     for(int s = 0; s < setNum; ++s) {
         cache_set set = CACHE.sets[s];
         if(set.lines != NULL) free(set.lines);
@@ -76,8 +71,6 @@ void clean(cache CACHE, long long setNum, int lineNum, long long size) {
 }
 
 int LRU(cache_set SET, cache_param param, int* used) {
-    printf("LRU called\n");
-
     int ret = 0;
     cache_line line;
     int max = SET.lines[0].access, min = max;
@@ -91,29 +84,20 @@ int LRU(cache_set SET, cache_param param, int* used) {
     }
     used[0] = min;
     used[1] = max;
-    printf("Returning LRU safely :)\n");
     return ret;
 }
 
 int emptyLine(cache_set SET, cache_param param) {
-    printf("emptyline called\n");
-
     cache_line line;
     for(int i = 0; i < param.E; ++i) {
         line = SET.lines[i];
-        if(!line.valid) {
-            printf("Returning emptyLine safely :)\n");
-            return i;
-        }
+        if(!line.valid) return i;
     }
-    printf("Returning emptyLine safely :)\n");
     return 0; // no empty line
 }
 
 // cache simulator
 cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
-    printf("simulate called\n");
-
     int tagsize = 64 - param.s - param.b, lineNum = param.E, prev = param.hits;
     int full = 1; // All lines full
 
@@ -123,12 +107,9 @@ cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
 
     // look for set
     cache_set search = CACHE.sets[setIdx];
-    printf("Found set! SetIdx: %llu\n", setIdx);
 
     for(int lidx = 0; lidx < lineNum; ++lidx) {
-        printf("Scanning line %d!\n", lidx);
         cache_line line = search.lines[lidx];
-        // Segmentation fault here
         if(line.valid) {
             if(line.tag == inputTag) { // cache hit
                 ++line.access;
@@ -137,19 +118,13 @@ cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
             }
         } else if(!(line.valid) && full) full = 0;
     }
-    if(prev == param.hits) {
-        ++param.misses; // cache miss
-    } else {
-        printf("Cache hit! - Returning Safely :)\n");
-        return param; // cache hit - just return
-    }
+    if(prev == param.hits) ++param.misses; // cache miss
+    else return param; // cache hit - just return
     // cache miss : replacement policy LRU / write to empty line
-    printf("Cache missed!\n");
     int* used = (int*) malloc(sizeof(int) * 2);
     int lruIdx = LRU(search, param, used);
 
     if(full) { // evict and overwrite
-        printf("Evict and overwrite\n");
         ++param.evicts;
         search.lines[lruIdx].tag = inputTag;
         search.lines[lruIdx].access = used[1] + 1;
@@ -202,8 +177,8 @@ int main(int argc, char** argv) {
     }
 
     // Check for exceptions
-    if(!param.s || !param.E || !param.b || trace_file == NULL) {
-        printf("Missing critical arguments.\n");
+    if(!param.s || !param.E || !param.b || !trace_file) {
+        printf("Missing required command line arguments.\n");
         exit(1);
     }
 
@@ -220,7 +195,6 @@ int main(int argc, char** argv) {
 
     // read file and execute
     while(fscanf(read_trace, " %c %llx,%d", &op, &addr, &size) == 3) {
-        // printf("Error while reading trace\n");
         switch(op) {
             case 'I': // instruction load
                 break;
