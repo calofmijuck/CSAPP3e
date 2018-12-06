@@ -123,7 +123,7 @@ cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
 
     // look for set
     cache_set search = CACHE.sets[setIdx];
-    printf("Found set! SetIdx: %ulld\n", setIdx);
+    printf("Found set! SetIdx: %llu\n", setIdx);
 
     for(int lidx = 0; lidx < lineNum; ++lidx) {
         printf("Scanning line %d!\n", lidx);
