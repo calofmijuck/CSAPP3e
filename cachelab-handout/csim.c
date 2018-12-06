@@ -123,12 +123,12 @@ cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
 
     // look for set
     cache_set search = CACHE.sets[setIdx];
-    printf("Found set!\n");
+    printf("Found set! SetIdx: %ulld\n", setIdx);
 
     for(int lidx = 0; lidx < lineNum; ++lidx) {
+        printf("Scanning line %d!\n", lidx);
         cache_line line = search.lines[lidx];
         // Segmentation fault here
-        printf("Scanning line %d!\n", lidx);
         if(line.valid) {
             if(line.tag == inputTag) { // cache hit
                 ++line.access;
