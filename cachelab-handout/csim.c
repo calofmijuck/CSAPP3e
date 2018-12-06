@@ -118,7 +118,7 @@ cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
     int full = 1; // All lines full
 
     // parse input
-    unsigned long long setIdx = (addr << tagsize) >> (tagsize + param.b);
+    unsigned long long setIdx = (unsigned long long) (addr << tagsize) >> (tagsize + param.b);
     memAddress inputTag = addr >> (param.s + param.b);
 
     // look for set
@@ -127,6 +127,7 @@ cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
 
     for(int lidx = 0; lidx < lineNum; ++lidx) {
         cache_line line = search.lines[lidx];
+        // Segmentation fault here
         printf("Scanning line %d!\n", lidx);
         if(line.valid) {
             if(line.tag == inputTag) { // cache hit
