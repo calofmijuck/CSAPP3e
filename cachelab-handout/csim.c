@@ -145,8 +145,7 @@ cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
 int main(int argc, char** argv) {
     cache_param param;
     cache CACHE;
-    memset(&param, 0, sizeof(param));
-    // malloc(sizeof(param));
+    malloc(sizeof(param));
 
     FILE *read_trace;
     char op;
