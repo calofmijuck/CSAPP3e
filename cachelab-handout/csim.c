@@ -41,6 +41,7 @@ typedef struct {
 
 // create cache
 cache make_cache(long long setNum, int lineNum, long long size) {
+    printf("make_cache called\n");
     cache ret;
     cache_set set;
     cache_line line;
@@ -64,14 +65,18 @@ cache make_cache(long long setNum, int lineNum, long long size) {
 }
 
 void clean(cache CACHE, long long setNum, int lineNum, long long size) {
+    printf("clean called\n");
+
     for(int s = 0; s < setNum; ++s) {
-        // cache_set set = CACHE.sets[s];
-        if(CACHE.sets[s].lines != NULL) free(CACHE.sets[s].lines);
+        cache_set set = CACHE.sets[s];
+        if(set.lines != NULL) free(set.lines);
     }
     if(CACHE.sets != NULL) free(CACHE.sets);
 }
 
 int LRU(cache_set SET, cache_param param, int* used) {
+    printf("LRU called\n");
+
     int ret = 0;
     cache_line line;
     int max = SET.lines[0].access, min = max;
@@ -89,6 +94,8 @@ int LRU(cache_set SET, cache_param param, int* used) {
 }
 
 int emptyLine(cache_set SET, cache_param param) {
+    printf("emptyline called\n");
+
     cache_line line;
     for(int i = 0; i < param.E; ++i) {
         line = SET.lines[i];
@@ -99,6 +106,8 @@ int emptyLine(cache_set SET, cache_param param) {
 
 // cache simulator
 cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
+    printf("simulate called\n");
+
     int tagsize = 64 - param.s - param.b, lineNum = param.E, prev = param.hits;
     int full = 1; // All lines full
 
@@ -123,10 +132,12 @@ cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
     else return param; // cache hit - just return
 
     // cache miss : replacement policy LRU / write to empty line
+    printf("Cache missed!\n");
     int* used = (int*) malloc(sizeof(int) * 2);
     int lruIdx = LRU(search, param, used);
 
     if(full) { // evict and overwrite
+        printf("Evict and overwrite\n");
         ++param.evicts;
         search.lines[lruIdx].tag = inputTag;
         search.lines[lruIdx].access = used[1] + 1;
@@ -155,7 +166,7 @@ int main(int argc, char** argv) {
 
     // parse arguments and commands
     while((c = getopt(argc, argv, "s:E:b:t:vh")) != -1) {
-        switch (c) {
+        switch(c) {
             case 's':
                 param.s = atoi(optarg);
                 break;
@@ -197,6 +208,7 @@ int main(int argc, char** argv) {
 
     // read file and execute
     while(fscanf(read_trace, " %c %llx,%d", &op, &addr, &size) == 3) {
+        printf("Error while reading trace\n");
         switch(op) {
             case 'I': // instruction load
                 break;
