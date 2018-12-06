@@ -127,6 +127,7 @@ cache_param simulate(cache CACHE, cache_param param, memAddress addr) {
 
     for(int lidx = 0; lidx < lineNum; ++lidx) {
         cache_line line = search.lines[lidx];
+        printf("Scanning line %d!\n", lidx);
         if(line.valid) {
             if(line.tag == inputTag) { // cache hit
                 ++line.access;
