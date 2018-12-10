@@ -52,22 +52,21 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
 
     // Transpose matrix for any size
     // Try the same method used in case N = 32
+    // Size 16 gives 2009 misses (9.9/10)
     else {
-        size = 8; // choose size
+        size = 16; // choose size
         for(r = 0; r < N; r += size) {
             for(c = 0; c < M; c += size) {
                 for(i = r; i < r + size && i < N; ++i) {
                     for(j = c; j < c + size && j < M; ++j) {
                         if(i != j) {
-                            // tmp = A[i][j];
-                            // B[j][i] = tmp;
-                            A[j][i] = B[j][i];
+                            tmp = A[i][j];
+                            B[j][i] = tmp;
                         }
                     }
                     if(r == c) {
-                        // tmp = A[i][i];
-                        // B[i][i] = tmp;
-                        B[i][i] = A[i][i];
+                        tmp = A[i][i];
+                        B[i][i] = tmp;
                     }
                 }
             }
