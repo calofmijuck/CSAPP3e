@@ -44,20 +44,30 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
         }
     }
 
-    if(N == 64) {
+    // When using the same method as in N = 32, the driver.py gives 0 score... (checked for size = 8, 16)
+    // Suggestion of something similar to loop unrolling?
+    else if(N == 64) {
+
+    }
+
+    // Transpose matrix for any size
+    // Try the same method used in case N = 32
+    else {
         size = 8; // choose size
         for(r = 0; r < N; r += size) {
             for(c = 0; c < M; c += size) {
-                for(i = r; i < r + size; ++i) {
-                    for(j = c; j < c + size; ++j) {
+                for(i = r; i < r + size && i < N; ++i) {
+                    for(j = c; j < c + size && j < M; ++j) {
                         if(i != j) {
-                            tmp = A[i][j];
-                            B[j][i] = tmp;
+                            // tmp = A[i][j];
+                            // B[j][i] = tmp;
+                            A[j][i] = B[j][i];
                         }
                     }
                     if(r == c) {
-                        tmp = A[i][i];
-                        B[i][i] = tmp;
+                        // tmp = A[i][i];
+                        // B[i][i] = tmp;
+                        B[i][i] = A[i][i];
                     }
                 }
             }
