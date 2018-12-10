@@ -25,7 +25,7 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
 
     // divide and conquer. divide 32x32 to many block matrices
     if(N == 32) {
-        size = 4; // choose size
+        size = 8; // choose size - 8 gives full mark
         for(r = 0; r < N; r += size) {
             for(c = 0; c < M; c += size) {
                 for(i = r; i < r + size; ++i) {
@@ -80,7 +80,7 @@ void registerFunctions()
     registerTransFunction(transpose_submit, transpose_submit_desc);
 
     /* Register any additional transpose functions */
-    registerTransFunction(trans, trans_desc);
+    // registerTransFunction(trans, trans_desc);
 
 }
 
