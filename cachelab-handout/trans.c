@@ -22,6 +22,7 @@ int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
     int size, r, c, i, j, tmp;
+    int a, s, d, f, g;
 
     // divide and conquer. divide 32x32 to many block matrices
     if(N == 32) {
@@ -47,7 +48,40 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
     // When using the same method as in N = 32, the driver.py gives 0 score... (checked for size = 8, 16)
     // Suggestion of something similar to loop unrolling?
     else if(N == 64) {
+        size = 4; // choose size;
+        for(r = 0; r < N; r += size) {
+            for(c = 0; c < M; c += size) {
+                a = A[r][c]; // load (r, c)
+                s = A[r + 1][c]; // load (r + 1, c)
+                g = A[r + 2][c + 2]; // load (r + 2, c + 2)
 
+                B[c + 3][r] = A[r][c + 3];
+                B[c + 3][r + 1] = A[r + 1][c + 3];
+                B[c + 3][r + 2] = A[r + 2][c + 3];
+
+                B[c + 2][r] = A[r][c + 2];
+                B[c + 2][r + 1] = A[r + 1][c + 2];
+                B[c + 2][r + 2] = g;
+
+                d = A[r + 2][c]; // load (r + 2, c)
+                f = A[r + 2][c + 1]; // load (r + 2, c + 1)
+                g = A[r + 1][c + 1]; // update
+
+                B[c + 1][r] = A[r][c + 1];
+                B[c + 1][r + 1] = g;
+                B[c + 1][r + 2] = f;
+
+                B[c][r] = a;
+                B[c][r + 1] = s;
+                B[c][r + 2] = d;
+
+                B[c][r + 3] = A[r + 3][c];
+                B[c + 1][r + 3] = A[r + 3][c + 1];
+                B[c + 2][r + 3] = A[r + 3][c + 2];
+
+                B[c + 3][r + 3] = A[r + 3][c + 3];
+            }
+        }
     }
 
     // Transpose matrix for any size
