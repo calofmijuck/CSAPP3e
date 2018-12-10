@@ -21,12 +21,26 @@ int is_transpose(int M, int N, int A[N][M], int B[M][N]);
  */
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
-    // int size, row, col, r, c, i, j;
-    int i, j, tmp;
-    for (i = 0; i < N; i++) {
-        for (j = 0; j < M; j++) {
-            tmp = A[i][j];
-            B[j][i] = tmp;
+    int size, r, c, i, j, tmp;
+
+    // divide and conquer. divide 32x32 to many block matrices
+    if(N == 32) {
+        size = 4; // choose size
+        for(r = 0; r < N; r += size) {
+            for(c = 0; c < M; c += size) {
+                for(i = r; i < r + size; ++i) {
+                    for(j = c; j < c + size; ++j) {
+                        if(i != j) {
+                            tmp = A[i][j];
+                            B[j][i] = tmp;
+                        }
+                    }
+                    if(r == c) {
+                        tmp = A[i][i];
+                        B[i][i] = tmp;
+                    }
+                }
+            }
         }
     }
 }
@@ -63,7 +77,7 @@ void trans(int M, int N, int A[N][M], int B[M][N])
 void registerFunctions()
 {
     /* Register your solution function */
-    // registerTransFunction(transpose_submit, transpose_submit_desc);
+    registerTransFunction(transpose_submit, transpose_submit_desc);
 
     /* Register any additional transpose functions */
     registerTransFunction(trans, trans_desc);
