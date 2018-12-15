@@ -80,7 +80,6 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
                 B[c][r + 3] = A[r + 3][c];
                 B[c + 1][r + 3] = A[r + 3][c + 1];
                 B[c + 2][r + 3] = A[r + 3][c + 2];
-
                 B[c + 3][r + 3] = A[r + 3][c + 3];
             }
         }
