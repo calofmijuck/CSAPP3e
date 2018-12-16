@@ -22,7 +22,8 @@ int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
     int size, r, c, i, j, tmp;
-    int a, s, d, f, g, h;
+    int a, s, d, f;
+    // int a, s, d, f, g, h;
 
     // divide and conquer. divide 32x32 to many block matrices
     if(N == 32) {
@@ -54,64 +55,138 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
 
         for(r = 0; r < N; r += size) {
             for(c = 0; c < M; c += size) {
+                if(r != c) {
+                    B[c][r] = A[r][c];
+                    B[c][r + 1] = A[r + 1][c];
+                    B[c][r + 2] = A[r + 2][c];
+                    B[c][r + 3] = A[r + 3][c];
 
-                a = A[r][c]; // load (r, c)
-                s = A[r + 1][c]; // load (r + 1, c)
-                d = A[r + 2][c]; // load (r + 2, c)
-                f = A[r + 2][c + 1]; // load (r + 2, c + 1)
-                g = A[r + 2][c + 2]; // load (r + 2, c + 2)
+                    B[c + 1][r] = A[r][c + 1];
+                    B[c + 1][r + 1] = A[r + 1][c + 1];
+                    B[c + 1][r + 2] = A[r + 2][c + 1];
+                    B[c + 1][r + 3] = A[r + 3][c + 1];
 
-                B[c + 3][r] = A[r][c + 3];
-                B[c + 3][r + 1] = A[r + 1][c + 3];
-                B[c + 3][r + 2] = A[r + 2][c + 3];
+                    B[c + 2][r] = A[r][c + 2];
+                    B[c + 2][r + 1] = A[r + 1][c + 2];
+                    B[c + 2][r + 2] = A[r + 2][c + 2];
+                    B[c + 2][r + 3] = A[r + 3][c + 2];
 
-                B[c + 2][r] = A[r][c + 2];
-                B[c + 2][r + 1] = A[r + 1][c + 2];
-                B[c + 2][r + 2] = g;
+                    B[c + 3][r] = A[r][c + 3];
+                    B[c + 3][r + 1] = A[r + 1][c + 3];
+                    B[c + 3][r + 2] = A[r + 2][c + 3];
+                    B[c + 3][r + 3] = A[r + 3][c + 3];
 
+                    // Upper left of B is done
 
-                g = A[r + 1][c + 1]; // update
+                    B[c][r + 4] = A[r][c + 4];
+                    B[c + 1][r + 4] = A[r][c + 5];
+                    B[c + 2][r + 4] = A[r][c + 6];
+                    B[c + 3][r + 4] = A[r][c + 7];
 
-                B[c + 1][r] = A[r][c + 1];
-                B[c + 1][r + 1] = g;
-                B[c + 1][r + 2] = f;
+                    B[c][r + 5] = A[r + 1][c + 4];
+                    B[c + 1][r + 5] = A[r + 1][c + 5];
+                    B[c + 2][r + 5] = A[r + 1][c + 6];
+                    B[c + 3][r + 5] = A[r + 1][c + 7];
 
-                B[c][r] = a;
-                B[c][r + 1] = s;
-                B[c][r + 2] = d;
+                    B[c][r + 6] = A[r + 2][c + 4];
+                    B[c + 1][r + 6] = A[r + 2][c + 5];
+                    B[c + 2][r + 6] = A[r + 2][c + 6];
+                    B[c + 3][r + 6] = A[r + 2][c + 7];
 
-                B[c][r + 3] = A[r + 3][c];
-                B[c + 1][r + 3] = A[r + 3][c + 1];
-                B[c + 2][r + 3] = A[r + 3][c + 2];
-                B[c + 3][r + 3] = A[r + 3][c + 3];
+                    B[c][r + 7] = A[r + 3][c + 4];
+                    B[c + 1][r + 7] = A[r + 3][c + 5];
+                    B[c + 2][r + 7] = A[r + 3][c + 6];
+                    B[c + 3][r + 7] = A[r + 3][c + 7];
+
+                    // Copy!
+                    a = B[c][r + 4];
+                    s = B[c][r + 5];
+                    d = B[c][r + 6];
+                    f = B[c][r + 7];
+
+                    B[c][r + 4] = A[r + 4][c];
+                    B[c][r + 5] = A[r + 5][c];
+                    B[c][r + 6] = A[r + 6][c];
+                    B[c][r + 7] = A[r + 7][c];
+
+                    B[c + 4][r] = a;
+                    B[c + 4][r + 1] = s;
+                    B[c + 4][r + 2] = d;
+                    B[c + 4][r + 3] = f;
+
+                    a = B[c + 1][r + 4];
+                    s = B[c + 1][r + 5];
+                    d = B[c + 1][r + 6];
+                    f = B[c + 1][r + 7];
+
+                    B[c + 1][r + 4] = A[r + 4][c + 1];
+                    B[c + 1][r + 5] = A[r + 5][c + 1];
+                    B[c + 1][r + 6] = A[r + 6][c + 1];
+                    B[c + 1][r + 7] = A[r + 7][c + 1];
+
+                    B[c + 5][r] = a;
+                    B[c + 5][r + 1] = s;
+                    B[c + 5][r + 2] = d;
+                    B[c + 5][r + 3] = f;
+
+                    a = B[c + 2][r + 4];
+                    s = B[c + 2][r + 5];
+                    d = B[c + 2][r + 6];
+                    f = B[c + 2][r + 7];
+
+                    B[c + 2][r + 4] = A[r + 4][c + 2];
+                    B[c + 2][r + 5] = A[r + 5][c + 2];
+                    B[c + 2][r + 6] = A[r + 6][c + 2];
+                    B[c + 2][r + 7] = A[r + 7][c + 2];
+
+                    B[c + 6][r] = a;
+                    B[c + 6][r + 1] = s;
+                    B[c + 6][r + 2] = d;
+                    B[c + 6][r + 3] = f;
+
+                    a = B[c + 3][r + 4];
+                    s = B[c + 3][r + 5];
+                    d = B[c + 3][r + 6];
+                    f = B[c + 3][r + 7];
+
+                    B[c + 3][r + 4] = A[r + 4][c + 3];
+                    B[c + 3][r + 5] = A[r + 5][c + 3];
+                    B[c + 3][r + 6] = A[r + 6][c + 3];
+                    B[c + 3][r + 7] = A[r + 7][c + 3];
+
+                    B[c + 7][r] = a;
+                    B[c + 7][r + 1] = s;
+                    B[c + 7][r + 2] = d;
+                    B[c + 7][r + 3] = f;
+
+                    // Lower left is done
+
+                    B[c + 4][r + 4] = A[r + 4][c + 4];
+                    B[c + 5][r + 4] = A[r + 4][c + 5];
+                    B[c + 6][r + 4] = A[r + 4][c + 6];
+                    B[c + 7][r + 4] = A[r + 4][c + 7];
+
+                    B[c + 4][r + 5] = A[r + 5][c + 4];
+                    B[c + 5][r + 5] = A[r + 5][c + 5];
+                    B[c + 6][r + 5] = A[r + 5][c + 6];
+                    B[c + 7][r + 5] = A[r + 5][c + 7];
+
+                    B[c + 4][r + 6] = A[r + 6][c + 4];
+                    B[c + 5][r + 6] = A[r + 6][c + 5];
+                    B[c + 6][r + 6] = A[r + 6][c + 6];
+                    B[c + 7][r + 6] = A[r + 6][c + 7];
+
+                    B[c + 4][r + 7] = A[r + 7][c + 4];
+                    B[c + 5][r + 7] = A[r + 7][c + 5];
+                    B[c + 6][r + 7] = A[r + 7][c + 6];
+                    B[c + 7][r + 7] = A[r + 7][c + 7];
+                    // Lower right done
+                } else {
+                    
+                }
+
             }
         }
-    } else if(M == 4 && N == 4) {
-        a = A[0][0];
-        s = A[1][0];
-        d = A[2][0];
-        f = A[3][0];
-
-        B[0][0] = a;
-        B[0][1] = s;
-        B[0][2] = d;
-        B[0][3] = f;
-
-        B[1][0] = A[0][1];
-        B[1][1] = A[1][1];
-        B[1][2] = A[2][1];
-        B[1][3] = A[3][1];
-
-        B[2][0] = A[0][2];
-        B[2][1] = A[1][2];
-        B[2][2] = A[2][2];
-        B[2][3] = A[3][2];
-
-        B[3][0] = A[0][3];
-        B[3][1] = A[1][3];
-        B[3][2] = A[2][3];
-        B[3][3] = A[3][3];
-
     }
 
     // Transpose matrix for any size
