@@ -181,69 +181,69 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
 
                 } else {
                     for(i = 0; i < 4; ++i){
-                        a = A[c + i][r + 0];
-                        s = A[c + i][r + 1];
-                        d = A[c + i][r + 2];
-                        f = A[c + i][r + 3];
-                        g = A[c + i][r + 4];
-                        h = A[c + i][r + 5];
-                        j = A[c + i][r + 6];
-                        k = A[c + i][r + 7];
+                        a = A[r + i][c + 0];
+                        s = A[r + i][c + 1];
+                        d = A[r + i][c + 2];
+                        f = A[r + i][c + 3];
+                        g = A[r + i][c + 4];
+                        h = A[r + i][c + 5];
+                        j = A[r + i][c + 6];
+                        k = A[r + i][c + 7];
 
-                		B[r + 0][c + i + 0] = a;
-                		B[r + 0][c + i + 4] = h;
-                		B[r + 1][c + i + 0] = s;
-                		B[r + 1][c + i + 4] = j;
-                		B[r + 2][c + i + 0] = d;
-                		B[r + 2][c + i + 4] = k;
-                        B[r + 3][c + i + 0] = f;
-                		B[r + 3][c + i + 4] = g;
-                	}
+                        B[c + 0][r + i + 0] = a;
+                        B[c + 0][r + i + 4] = h;
+                        B[c + 1][r + i + 0] = s;
+                        B[c + 1][r + i + 4] = j;
+                        B[c + 2][r + i + 0] = d;
+                        B[c + 2][r + i + 4] = k;
+                        B[c + 3][r + i + 0] = f;
+                        B[c + 3][r + i + 4] = g;
+                    }
 
-                	a = A[c + 4][r + 4];
-                	s = A[c + 5][r + 4];
-                	d = A[c + 6][r + 4];
-                	f = A[c + 7][r + 4];
-                	g = A[c + 4][r + 3];
-                	h = A[c + 5][r + 3];
-                	j = A[c + 6][r + 3];
-                	k = A[c + 7][r + 3];
+                    a = A[r + 4][c + 4];
+                    s = A[r + 5][c + 4];
+                    d = A[r + 6][c + 4];
+                    f = A[r + 7][c + 4];
+                    g = A[r + 4][c + 3];
+                    h = A[r + 5][c + 3];
+                    j = A[r + 6][c + 3];
+                    k = A[r + 7][c + 3];
 
-                	B[r + 4][c + 0] = B[r + 3][c + 4];
-                	B[r + 4][c + 4] = a;
-                	B[r + 3][c + 4] = g;
-                	B[r + 4][c + 1] = B[r + 3][c + 5];
-                	B[r + 4][c + 5] = s;
-                	B[r + 3][c + 5] = h;
-                	B[r + 4][c + 2] = B[r + 3][c + 6];
-                	B[r + 4][c + 6] = d;
-                	B[r + 3][c + 6] = j;
-                	B[r + 4][c + 3] = B[r + 3][c + 7];
-                	B[r + 4][c + 7] = f;
-                	B[r + 3][c + 7] = k;
+                    B[c + 4][r + 0] = B[c + 3][r + 4];
+                    B[c + 4][r + 4] = a;
+                    B[c + 3][r + 4] = g;
+                    B[c + 4][r + 1] = B[c + 3][r + 5];
+                    B[c + 4][r + 5] = s;
+                    B[c + 3][r + 5] = h;
+                    B[c + 4][r + 2] = B[c + 3][r + 6];
+                    B[c + 4][r + 6] = d;
+                    B[c + 3][r + 6] = j;
+                    B[c + 4][r + 3] = B[c + 3][r + 7];
+                    B[c + 4][r + 7] = f;
+                    B[c + 3][r + 7] = k;
 
-                	for(i = 0; i < 3; ++i) {
-                		a = A[c + 4][r + 5 + i];
-                		s = A[c + 5][r + 5 + i];
-                		d = A[c + 6][r + 5 + i];
-                		f = A[c + 7][r + 5 + i];
-                		g = A[c + 4][r + i];
-                		h = A[c + 5][r + i];
-                		j = A[c + 6][r + i];
-                		k = A[c + 7][r + i];
+                    for(i = 0; i < 3; ++i) {
+                        a = A[r + 4][c + 5 + i];
+                        s = A[r + 5][c + 5 + i];
+                        d = A[r + 6][c + 5 + i];
+                        f = A[r + 7][c + 5 + i];
+                        g = A[r + 4][c + i];
+                        h = A[r + 5][c + i];
+                        j = A[r + 6][c + i];
+                        k = A[r + 7][c + i];
 
-                		B[r + 5 + i][c + 0] = B[r + i][c + 4];
-                		B[r + 5 + i][c + 4] = a;
-                		B[r + i][c + 4] = g;
-                		B[r + 5 + i][c + 1] = B[r + i][c + 5];
-                		B[r + 5 + i][c + 5] = s;
-                		B[r + i][c + 5] = h;
-                		B[r + 5 + i][c + 2] = B[r + i][c + 6];
-                		B[r + 5 + i][c + 6] = d;
-                		B[r + i][c + 6] = j;
-                		B[r + 5 + i][c + 3] = B[r + i][c + 7];
-                		B[r + 5 + i][c + 7] = f;
-                		B[r + i][c + 7] = k;
+                        B[c + 5 + i][r + 0] = B[c + i][r + 4];
+                        B[c + 5 + i][r + 4] = a;
+                        B[c + i][r + 4] = g;
+                        B[c + 5 + i][r + 1] = B[c + i][r + 5];
+                        B[c + 5 + i][r + 5] = s;
+                        B[c + i][r + 5] = h;
+                        B[c + 5 + i][r + 2] = B[c + i][r + 6];
+                        B[c + 5 + i][r + 6] = d;
+                        B[c + i][r + 6] = j;
+                        B[c + 5 + i][r + 3] = B[c + i][r + 7];
+                        B[c + 5 + i][r + 7] = f;
+                        B[c + i][r + 7] = k;
                     }
                 }
             }
