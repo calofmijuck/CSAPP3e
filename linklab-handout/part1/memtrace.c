@@ -111,4 +111,3 @@ void fini(void) {
     LOG_STOP();
     free_list(list);
 }
-
