@@ -86,23 +86,53 @@ void *calloc(size_t nmemb, size_t size) {
 }
 
 void *realloc(void *ptr, size_t size) {
-    n_realloc++;
-    n_allocb += size;
     char* error;
     reallocp = dlsym(RTLD_NEXT, "realloc");
     if((error = dlerror()) != NULL) {
         fputs(error, stderr);
         exit(1);
     }
-    item* block = find(list, ptr); // find block
-    if(block != NULL) { // For cases where the ptr is not found in the list
-        n_freeb += block -> size; // Add to freed byte
-        block -> cnt --;
+    void* res = reallocp(ptr, size); // first, reallocate
+    LOG_REALLOC(ptr, size, res); // LOG it
+    n_realloc++; // increment count
+    // n_allocb += size;
+
+    if(res == ptr) { // pointer didn't change resizing happened
+        item* block = find(list, ptr); // find block
+        // this block cannot be null
+        if(block -> size > size) { // decreased size
+            n_freeb += block -> size - size;
+        } else { // increased size
+            n_allocb += size - block -> size;
+        }
+        // update totals
         dealloc(list, block); // deallocate
+        block -> cnt --;
+        alloc(list, res, size); // allocate item in list
+    } else { // realloc freed memory in ptr and allocated somewhere else
+        item* block = find(list, ptr); // try to find ptr in list
+        /*
+            There is a chance block might be NULL
+            Case 1. ptr is NULL
+                In this case, realloc(NULL, size) was called.
+                C standard says that this is equal to malloc(size)
+            Case 2. ptr is not NULL but not found in the list
+                In this case, realloc to some other location was called.
+                The processor will still try to allocate memory.
+                This is undefined behavior.
+            In both cases, free doesn't happen
+        */
+        if(ptr == NULL || block == NULL) {
+            alloc(list, res, size); // allocate item in list
+            n_allocb += size; // add
+        } else { // block was found
+            n_freeb += block -> size; // original place was freed
+            n_allocb += size; // add
+            dealloc(list, block); // deallocate
+            block -> cnt --;
+            alloc(list, res, size); // add item in list
+        }
     }
-    void* res = reallocp(ptr, size);
-    alloc(list, res, size); // add item in list
-    LOG_REALLOC(ptr, size, res);
     return res;
 }
 
