@@ -38,4 +38,3 @@ run: compile
 
 clean:
 	@rm -rf $(LIB) *.o
-

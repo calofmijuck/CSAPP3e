@@ -36,7 +36,6 @@ void *malloc(size_t size) {
     n_allocb += size;
     n_malloc++;
     char* error;
-    assert(size != 0);
     mallocp = dlsym(RTLD_NEXT, "malloc");
     if((error = dlerror()) != NULL) {
         fputs(error, stderr);
@@ -49,10 +48,11 @@ void *malloc(size_t size) {
 }
 
 void free(void *ptr) {
-    char* error;
-    assert(ptr != NULL);
+    LOG_FREE(ptr);
+    if(ptr == NULL) return;
     item* block = find(list, ptr); // find item in list
     n_freeb += (block -> size); // add freed byte
+    char* error;
     freep = dlsym(RTLD_NEXT, "free");
     if((error = dlerror()) != NULL) {
         fputs(error, stderr);
@@ -60,14 +60,12 @@ void free(void *ptr) {
     }
     freep(ptr);
     dealloc(list, ptr); // delete item in list
-    LOG_FREE(ptr);
 }
 
 void *calloc(size_t nmemb, size_t size) {
     n_calloc++;
     n_allocb += size;
     char* error;
-    assert(size != 0);
     callocp = dlsym(RTLD_NEXT, "calloc");
     if((error = dlerror()) != NULL) {
         fputs(error, stderr);
@@ -83,17 +81,17 @@ void *realloc(void *ptr, size_t size) {
     n_realloc++;
     n_allocb += size;
     char* error;
-    assert(ptr != NULL);
-    assert(size != 0);
     reallocp = dlsym(RTLD_NEXT, "realloc");
     if((error = dlerror()) != NULL) {
         fputs(error, stderr);
         exit(1);
     }
     item* block = find(list, ptr); // find block
-    n_freeb += block -> size; // Add to freed byte
-    block -> cnt --;
-    dealloc(list, block); // deallocate
+    if(block != NULL) { // For cases where the ptr is not found in the list
+        n_freeb += block -> size; // Add to freed byte
+        block -> cnt --;
+        dealloc(list, block); // deallocate
+    }
     void* res = reallocp(ptr, size);
     alloc(list, res, size); // add item in list
     LOG_REALLOC(ptr, size, res);
@@ -106,9 +104,14 @@ void *realloc(void *ptr, size_t size) {
 __attribute__((constructor))
 void init(void) {
     char *error;
+
     LOG_START();
+
     // initialize a new list to keep track of all memory (de-)allocations
+    // (not needed for part 1)
     list = new_list();
+
+    // ...
 }
 
 //
@@ -116,10 +119,11 @@ void init(void) {
 //
 __attribute__((destructor))
 void fini(void) {
+    // ...
     unsigned long cnt = n_malloc + n_calloc + n_realloc;
+
     LOG_STATISTICS(n_allocb, n_allocb / cnt, n_freeb);
-    // Log..
-    LOG_NONFREED_START();
+    if(n_allocb != n_freeb) LOG_NONFREED_START();
     while(list -> next) {
         item *curr = list -> next;
         if(curr -> cnt >= 1) {
@@ -128,6 +132,9 @@ void fini(void) {
         list = list -> next;
     }
     LOG_STOP();
+
+    // free list (not needed for part 1)
     free_list(list);
 }
 
+// ...
