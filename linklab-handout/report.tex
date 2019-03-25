@@ -1,0 +1,171 @@
+%!TEX encoding = utf-8
+\documentclass[12pt]{report}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\geometry{
+	top = 25mm,
+	left = 20mm,
+	right = 20mm,
+	bottom = 20mm
+}
+\geometry{a4paper}
+
+\pagenumbering{gobble}
+\renewcommand{\baselinestretch}{1.3}
+
+\definecolor{mGreen}{rgb}{0,0.6,0}
+\definecolor{mGray}{rgb}{0.5,0.5,0.5}
+\definecolor{mPurple}{rgb}{0.58,0,0.82}
+\definecolor{backgroundColour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	commentstyle=\color{mGreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{mGray},
+	stringstyle=\color{mPurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	captionpos=b,                    
+	keepspaces=true,                 
+	numbers=left,                    
+	numbersep=-40pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=4,
+	language=C,
+}
+
+\begin{document}
+\begin{center}
+\textbf{\Large System Programming - Linker Lab Report}\\
+\large 2019 Spring, 2017-18570 Sungchan Yi
+\end{center}
+* I followed the \textbf{C99 standard} for the implementations for this lab.
+
+\paragraph*{\large 0 Introduction}~
+
+At first glance, there was too much to do. I had to read all the files and resolve all the symbols by myself. Then I started to realize that the lab pdf forewarned me that I would have to read other people's codes.
+
+So I looked at \texttt{\#define}s, \texttt{\#include}s, the test cases, and all kinds of \texttt{.h} files. I also noticed that I couldn't change the code for the test cases. Moreover the compile options did not specify anything for the linker.
+
+Thus I decided to try run-time interpositioning of dynamic libraries.
+
+\paragraph*{\large 1 Part One}~
+
+After seeing the test cases, I had to override \texttt{malloc}, \texttt{free}, \texttt{calloc}, and \texttt{realloc} function. So my first try was writing the code for \texttt{mymalloc} and \texttt{myfree}.
+I tested it inside the \texttt{init} constructor, and it worked well.
+
+Now the hard part was how to make the functions of test cases call the functions I defined.
+
+Since my functions would be a strong symbol, I thought the linker would choose my function instead of the original implementation in \texttt{libc}. But the test case does not \texttt{\#include <malloc.h>} that I wrote, so it seems that the test cases are just calling the original implementation.\footnote{I could not change the compiler options, and test case source codes. I did use the \texttt{dlsym} function but it didn't work for some unknown reason.}
+
+To try and find why my functions weren't being called, I added \texttt{printf} statements for debugging purposes. Then the program started not to execute properly and kept giving me segmentation faults. So I pondered for a few hours on how to fix this.\footnote{At this point of time, I didn't know \texttt{printf} was an unsafe function.} I even tried including my own header file \texttt{<malloc.h>} into the test case, but it still didn't work.
+
+After many tries, I found out that the \texttt{printf} statement added for debugging caused segmentation faults. When I erased it, it just worked like magic. So I made minor changes and after rearranging functions a bit, I implemented all 4 functions.
+
+\paragraph*{\large 2 Part Two}~
+
+Before I began part 2, I read the implementation of \texttt{memlist}. A list with dummy head \texttt{list} is created in \texttt{init()}, so every time memory is allocated, I realized that I had to add a new item to the list. 
+
+I also read the methods defined in \texttt{memlist.h}, and the implementations in \texttt{memlist.c}. I found out a few things on how this \texttt{memlist} works. Every time an memory allocating function is called, I call \texttt{alloc()} function and the reference count will increase. Also, every time memory is freed, I call \texttt{dealloc()} and the reference count will decrease.
+
+I also got the idea of using the reference count to track down non-deallocated memory. At \texttt{fini()}, I would traverse the list and print any item with reference count greater than or equal to 1.\footnote{Reference count \texttt{cnt} is initialized to 1 so if it is freed after allocation, \texttt{cnt} would have to be less than 1.}
+
+There weren't that many changes when I was extending my implementation from Part 1. I just had to keep track of \texttt{n\_freeb} to print at the end.
+
+
+\paragraph*{\large 3 Part Three}~
+
+At first, I had no idea on how to print function's name and the offset. So I searched on Google and tried to gather information about memory allocation, instruction pointers and etc. During the process, I found out that \texttt{realloc(ptr, size)} frees allocated memory in \texttt{ptr} and \textit{reallocates} memory of size \texttt{size} somewhere else.\footnote{Well, to be exact, \texttt{realloc} \textit{can} reallocate memory on the same place as \texttt{ptr}.} So I had to modify Part 2 a bit.
+
+I was stuck here for a few days, and kind of forgot about this. When I tried to do the lab, I had to look up the lab pdf again. There I found out some useful functions that would help me finish this lab. They were the functions in the \texttt{libunwind} library.
+
+I went to google and searched for \texttt{libunwind} and read the documentation for the functions that were mentioned in the lab pdf. Additionally I looked at some example codes and ran it on the test cases and found out how I should implement the lab.
+
+\texttt{unw\_step} function helped me step out of the stack frame and \texttt{unw\_get\_proc\_name} was a function to get the name of the procedure. The main thing to consider was how many times I should call the \texttt{unw\_step} function. The example code for \texttt{libunwind} let me know that I had to call \texttt{unw\_step} 3 times.\footnote{This was another problem, since if the \texttt{main} routine called a function \texttt{foo} and if \texttt{malloc} was called inside of \texttt{foo}, I would have to call \texttt{unw\_step} once more. Later, I was notified that there were no such test cases.}
+Furthermore, the offset was biased to be 5 more, so I had to subtract 5 for the offset. This was because the \texttt{call} instruction was 5 bytes.
+
+\paragraph*{\large 4 Bonus Part}~
+
+The bonus part was quite easy, since the reference count would be less than 0 if a double free occurs. But I had segmentation faults for a while, because I put the \texttt{if(block == NULL)} statement after checking double free. That statement was for checking an illegal free, which means that the \texttt{find} function in \texttt{memlist} would return \texttt{NULL}. Referencing \texttt{cnt} of \texttt{NULL} would of course give segmentation faults. Switching the order of statements fixed the problem.\\
+
+\paragraph*{\large 5 Wrap-Up}~
+
+I did this lab quite early after it was announced. So after a few days, there were so many questions on eTL and I had a hard time reading all the questions and answers. Eventually, I had to modify some of my implementations. And suddenly an email came and it said that I could choose to implement in C99 standard. Since I originally implemented everything in C99 standard, I thought there was nothing to modify. For the last time, I reviewed my code and tried some of my own test cases to check if it worked properly.
+
+Then I saw an interesting question on eTL, and it said that there will be some special cases. Due to the sudden changes, I restarted the whole thing. So I looked up for more references and found out the behaviors of memory allocating functions for special cases.
+
+Here's some things I found out.
+\begin{itemize}
+	\item \texttt{free(NULL)} does nothing.\footnote{It crashes on some OS, but it worked on \texttt{sp1.snucse.org}}
+	\item Calling \texttt{realloc} on freed memory pointer works. (Undefined Behavior)
+	\item \texttt{realloc(NULL, size)} is the same as \texttt{malloc(size)}.
+\end{itemize}
+And moreover, I read the behavior of \texttt{realloc} on a reference\footnote{\texttt{https://en.cppreference.com/w/c/memory/realloc}}, and it said these two things about how reallocation is done.
+\begin{itemize}
+	\item[(a)] Expanding or contracting the existing area pointed to by \texttt{ptr}, if possible. The contents of the area remain unchanged up to the lesser of the new and old sizes. If the area is expanded, the contents of the new part of the array are undefined.
+	\item[(b)] Allocating a new memory block of size \texttt{new\_size} bytes, copying memory area with size equal the lesser of the new and the old sizes, and freeing the old block.
+\end{itemize}
+I only implemented (b), so I fixed my code to work for (a). The comments show how I did it.
+\begin{center}
+	\begin{lstlisting}[style=CStyle]
+		void *realloc(void *ptr, size_t size) {
+			char* error;
+			reallocp = dlsym(RTLD_NEXT, "realloc");
+			if((error = dlerror()) != NULL) {
+				fputs(error, stderr);
+			exit(1);
+			}
+			void* res = reallocp(ptr, size); // first, reallocate
+			LOG_REALLOC(ptr, size, res); // LOG it
+			n_realloc++; // increment count
+		
+			if(res == ptr) { // pointer didn't change resizing happened
+				item* block = find(list, ptr); // find block
+				// this block cannot be null
+				if(block -> size > size) { // decreased size
+					n_freeb += block -> size - size;
+				} else { // increased size
+					n_allocb += size - block -> size;
+				}
+				// update totals
+				dealloc(list, block); // deallocate
+				block -> cnt --;
+				alloc(list, res, size); // allocate item in list
+			} else { // freed memory in ptr and allocated somewhere else
+			item* block = find(list, ptr); // try to find ptr in list
+			/*
+				There is a chance block might be NULL
+				Case 1. ptr is NULL
+					In this case, realloc(NULL, size) was called.
+					C standard says that this is equal to malloc(size)
+				Case 2. ptr is not NULL but not found in the list
+					In this case, realloc to some other location was called.
+					The processor will still try to allocate memory.
+					This is undefined behavior.
+				In both cases, free doesn't happen
+			*/
+			if(ptr == NULL || block == NULL) {
+				alloc(list, res, size); // allocate item in list
+				n_allocb += size; // add
+			} else { // block was found
+				n_freeb += block -> size; // original place was freed
+				n_allocb += size; // add
+				dealloc(list, block); // deallocate
+				block -> cnt --;
+				alloc(list, res, size); // add item in list
+				}
+			}
+			return res;
+		}\end{lstlisting}
+\end{center}
+
+\paragraph*{\large 6 Conclusion}~
+
+Although so many questions and answers confused me on how I should implement the \texttt{realloc} function, the lab itself was quite interesting. I really like the idea of interpositioning, and I think it really would be useful for debugging purposes. Interpositioning at run-time really blew my mind.
+ 
+\end{document}
