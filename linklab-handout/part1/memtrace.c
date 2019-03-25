@@ -60,7 +60,7 @@ void free(void *ptr) {
 
 void *calloc(size_t nmemb, size_t size) {
     n_calloc++;
-    n_allocb += size;
+    n_allocb += size * nmemb;
     char* error;
     callocp = dlsym(RTLD_NEXT, "calloc");
     if((error = dlerror()) != NULL) {
@@ -121,3 +121,4 @@ void fini(void)
 }
 
 // ...
+
