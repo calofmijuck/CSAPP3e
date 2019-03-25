@@ -67,11 +67,13 @@ To try and find why my functions weren't being called, I added \texttt{printf} s
 
 After many tries, I found out that the \texttt{printf} statement added for debugging caused segmentation faults. When I erased it, it just worked like magic. So I made minor changes and after rearranging functions a bit, I implemented all 4 functions.
 
+The procedure was quite simple. Call \texttt{dlsym(RTLD\_NEXT, func\_name)} and save it to a function pointer. Call the function from the pointer and return. During the process, track down the changes in allocated bytes, freed bytes. \\
+
 \paragraph*{\large 2 Part Two}~
 
 Before I began part 2, I read the implementation of \texttt{memlist}. A list with dummy head \texttt{list} is created in \texttt{init()}, so every time memory is allocated, I realized that I had to add a new item to the list. 
 
-I also read the methods defined in \texttt{memlist.h}, and the implementations in \texttt{memlist.c}. I found out a few things on how this \texttt{memlist} works. Every time an memory allocating function is called, I call \texttt{alloc()} function and the reference count will increase. Also, every time memory is freed, I call \texttt{dealloc()} and the reference count will decrease.
+I also read the methods defined in \texttt{memlist.h}, and the implementations in \texttt{memlist.c}. I found out a few things on how this \texttt{memlist} works. Every time an memory allocating function is called, I call \texttt{alloc()} function a new item will be added to the list. If the item is a duplicate, the reference count will automatically increase. Also, every time memory is freed, I call \texttt{dealloc()} and the reference count will decrease.
 
 I also got the idea of using the reference count to track down non-deallocated memory. At \texttt{fini()}, I would traverse the list and print any item with reference count greater than or equal to 1.\footnote{Reference count \texttt{cnt} is initialized to 1 so if it is freed after allocation, \texttt{cnt} would have to be less than 1.}
 
@@ -88,6 +90,46 @@ I went to google and searched for \texttt{libunwind} and read the documentation 
 
 \texttt{unw\_step} function helped me step out of the stack frame and \texttt{unw\_get\_proc\_name} was a function to get the name of the procedure. The main thing to consider was how many times I should call the \texttt{unw\_step} function. The example code for \texttt{libunwind} let me know that I had to call \texttt{unw\_step} 3 times.\footnote{This was another problem, since if the \texttt{main} routine called a function \texttt{foo} and if \texttt{malloc} was called inside of \texttt{foo}, I would have to call \texttt{unw\_step} once more. Later, I was notified that there were no such test cases.}
 Furthermore, the offset was biased to be 5 more, so I had to subtract 5 for the offset. This was because the \texttt{call} instruction was 5 bytes.
+
+Here is how I implemented the \texttt{get\_callinfo} function.
+	\begin{lstlisting}[style=Cstyle]
+		#include <string.h>
+		
+		int get_callinfo(char *fname, size_t fnlen, unsigned long long *ofs) {
+			char f_name[fnlen]; // stores function name
+			unw_cursor_t cursor; // cursor to the stack frame
+			unw_context_t context;
+			unw_word_t off; // offset
+			unw_proc_info_t pip; // proc info pointer
+			char procname[256]; // procedure name
+			
+			// Store the name of the caller function
+			char mainf[] = "main";
+			char libcmain[] = "__libc_start_main";
+			int ret;
+			
+			if(unw_getcontext(&context)) return -1; // Get context error
+			if(unw_init_local(&cursor, &context)) return -1;
+			for(int i = 0; i < 3; i++) { // Perform step 3 times
+				if(unw_step(&cursor) < 0) return -1;
+				if(unw_get_proc_info(&cursor, &pip)) break; // get proc info
+				ret = unw_get_proc_name(&cursor, procname, 256, &off); 
+				// get name and offset
+			}
+			// call instruction takes up 5 bytes
+			*ofs = (unsigned long long) off - 5; 
+			ret = unw_get_proc_name(&cursor, procname, 256, &off);
+			if(strcmp(procname, libcmain) == 0) { 
+				// if the procedure name is equal to __libc_start_main
+				// copy main to fname
+				strcpy(fname, mainf);
+			} else { // else copy the current procedure name to fname
+				strcpy(fname, procname);
+			}
+			return ret;
+		}
+		
+	\end{lstlisting}
 
 \paragraph*{\large 4 Bonus Part}~
 
