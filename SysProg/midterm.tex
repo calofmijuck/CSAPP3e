@@ -1,0 +1,220 @@
+%!TEX encoding = utf-8
+\documentclass[12pt]{article}
+\usepackage{kotex}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\geometry{
+	top = 15mm,
+	left = 15mm,
+	right = 15mm,
+	bottom = 15mm
+}
+\geometry{a4paper}
+
+\pagenumbering{gobble}
+\renewcommand{\baselinestretch}{1.3}
+\definecolor{mGreen}{rgb}{0,0.6,0}
+\definecolor{mGray}{rgb}{0.5,0.5,0.5}
+\definecolor{mPurple}{rgb}{0.58,0,0.82}
+\definecolor{backgroundColour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	commentstyle=\color{mGreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{mGray},
+	stringstyle=\color{mPurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	captionpos=b,                    
+	keepspaces=true,                 
+	numbers=left,                    
+	numbersep=-10pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=4,
+	language=C,
+}
+
+\begin{document}{\sffamily
+\begin{center}
+	\textbf{\large 2019 Spring - System Programming}
+\end{center}
+\begin{enumerate}
+\item \texttt{setjmp()}, \texttt{longjmp()} 가 사용되는 예제를 하나만 드시오.
+\begin{itemize}
+	\item The \texttt{setjmp} function saves the current \textit{calling environment} in the \texttt{env} buffer, for later use by \texttt{longjmp}, and returns 0. The calling environment includes the program counter, stack pointer, and general purpose registers.
+	\item The \texttt{longjmp} function restores the calling environment from the \texttt{env} buffer and then triggers a return from the most recent \texttt{setjmp} call that initialized \texttt{env}. The \texttt{setjmp} then returns with the nonzero return value \texttt{retval}.
+	\begin{lstlisting}[style=Cstyle]
+	#include <setjmp.h>
+	int setjmp(jmp_buf env);
+	void longjmp(jmp_buf env, int retval);\end{lstlisting}
+	\item Example.
+	\begin{lstlisting}[style=Cstyle]
+	#include "csapp.h"
+	jmp_buf buf;
+	int error1 = 0, error2 = 1;
+	void foo(void), bar(void);
+	int main() {
+		switch(setjmp(buf)) {
+			case 0:
+				foo(); break;
+			case 1:
+				printf("Detected error 1 in foo\n"); break;
+			case 2:
+				printf("Detected error 2 in foo\n"); break;
+			default:
+				printf("Unknown error happened.\n")
+		}
+		exit(0);
+	}
+	
+	void foo(void) {
+		if(error1) longjmp(buf, 1);
+		bar();
+	}
+	
+	void bar(void) {
+		if(error2) longjmp(buf, 2);
+	}
+\end{lstlisting}
+	\item Permits an immediate return from a deeply nested function call. Good tool when a non-local jump is needed. Normal \texttt{jmp} can't jump to other functions without call/return.
+\end{itemize}
+
+\pagebreak
+\item Library interpositioning 이 compile time, link time, run time 에 일어나는 과정을 설명하시오.
+\begin{itemize}
+	\item \textbf{Library Interpositioning}: Allows you to intercept calls to shared library functions and execute your own code instead.
+	\item \textbf{Compile Time}: Apparent calls to user's \texttt{\#define} function get macro-expanded into calls. It's very simple, but you must have access to original source and must be able to recompile this.
+	\item \textbf{Link Time}: Interpose when the relocatable object files are statically linked to from an executable object file.
+	\item \textbf{Load/Run Time}: Interpose when an executable object file is loaded into memory, dynamically linked, and then executed. Implement customized version of $X'$, $Y'$, and use dynamic linking to load the library functions under different names.
+\end{itemize}	
+\item Zombie process 가 어떻게 생기는지, 이를 어떻게 방지할 수 있는지 설명하시오.
+\begin{itemize}
+	\item When a parent process dies \textit{before} the child process, \texttt{init} will take care of the orphaned child.
+	\item A terminated process that has not yet been reaped is called a zombie, and this happens when the child process is terminated but not reaped by the parent process.
+	\item To prevent this, the parent process can use the \texttt{waitpid} function to reap zombie children.
+\end{itemize}
+
+\item TLB 의 역할을 서술하고 일반적인 cache 보다 hit ratio 가 높은 이유를 설명하시오.
+\begin{itemize}
+	\item \textbf{Translation Lookaside Buffer} is a small cache of page table entries in the memory management unit. TLB is a small, virtually addressed cache where each line holds a block consisting of a single PTE.
+	\item Each entry in the TLB is a adress to a page, and a page is generally 4K. Every address within a page will cause a page hit. But in normal caches, the range for a cache hit is block (word) size, which is 4 bytes. Thus TLB's hit ratio is higher.
+\end{itemize}
+
+\item File I/O 에서 short count 란 무엇인지, 언제 일어나는지 설명하시오.
+\begin{itemize}
+	\item \texttt{read} and \texttt{write} functions may transfer fewer bytes than the application requests. This is called a \textbf{short count}, and this is not an error.
+	\item Short counts happen in these cases.
+	\begin{itemize}
+		\item Encountering EOF on reads.
+		\item Reading text lines from a terminal.
+		\item Reading and writing network sockets.
+	\end{itemize}
+\end{itemize}
+
+\item Executable file 이 메모리에 올라갈 때 어떤 위치에 올라가게 될 지는 미리 알 수 없다. 올라가는 위치의 주소에 따라 변수나 함수의 주소가 바뀌게 될텐데, linker 와 loader가 이를 어떻게 처리하는지 설명하시오.
+\begin{itemize}
+	\item The \textbf{linker} resolves symbols, relocates the address in each object file, and merges then into a single address space. Also, dynamic linking binds shared libraries at runtime.
+	\item The \textbf{loader} copies the code and data in the executable object file from disk into memory and then runs the program by jumping to its first instruction, or \textit{entry point}.
+\end{itemize}
+
+\item Global variable 을 사용했을 때 생기는 문제점과 해결방안을 제시하시오.
+\begin{itemize}
+	\item The use of global variables may cause naming conflicts. If the variable is not initialized, many source codes may refer to the same variable, which may cause nasty bugs. (Weak symbol)
+	\item Solutions
+	\begin{itemize}
+		\item Avoid them if possible
+		\item Use \texttt{static} keyword
+		\item Initialize when defining a global variable
+		\item Use \texttt{extern} keyword when referencing an external global variable.
+	\end{itemize}
+\end{itemize}
+
+\item 지금의 Linux 에서는 여러 개의 시그널이 도착해도 이를 모두 처리하는 것은 불가능하다. 그 이유를 설명하고 어떻게 하면 모든 시그널을 받을 수 있겠는지 방법을 제시하시오.
+\begin{itemize}
+	\item Since the \texttt{pending} variable is a bit vector, it can only detect on/off. So when many signals of the same kind arrive, it will only change 1 bit of the \texttt{pending} bit vector. And this bit is set to 0 after the signal is handled. So some of the signals may be ignored.
+	\item If a bit in the \texttt{pending} bit vector is 1, we can only infer that at least 1 signal has arrived.
+	\item Thus when writing a handler, one must assume that at least 1 signal has arrived, and try to let the handler do all the work of cleaning and finding out what to do.
+	\item (???) One can use \texttt{sigqueue} to queue a signal and data to a process.
+\end{itemize}
+
+\item ELF file format
+\begin{itemize}
+	\item \texttt{.data}: Initialized global variables
+	\item \texttt{.bss}: Uninitialized global variables, no space
+	\item \texttt{.symtab}: Procedure and static variable names
+\end{itemize}
+
+\item Guidelines for writing safe signal handlers
+\begin{enumerate}
+	\item Keep your handlers as simple as possible
+	\item Call only \textit{async-signal-safe} functions in your handlers
+	\item Save and restore \texttt{errno} on entry and exit
+	\item Protect access to shared data structures by temporarily blocking all signals (in both handler and main - \texttt{sigprocmask})
+	\item Declare global variables as \texttt{volatile}
+	\item Declare global flags as \texttt{volatile sig\_atmoic\_t} (Read/write happens on one un-interruptable step)
+\end{enumerate}
+
+\item Relocation Algorithm
+\begin{lstlisting}[style=Cstyle]
+	foreach section s {
+		foreach relocation entry r {
+			refptr = s + r.offset; // ptr to reference to be relocated
+			
+			// Relocate a PC-relative reference
+			if(r.type == R_X86_64_PC32) {
+				refaddr = ADDR(s) + r.offset; // ref's run-time address
+				*refptr = (unsigned) (ADDR(r.symbol) + *refptr - refaddr);
+			}
+			
+			// Relocate an absolute reference
+			if(r.type == R_X86_64_32)
+				*refptr = (unsigned) (ADDR(r.symbol) + *refptr);
+		}
+	}
+\end{lstlisting}
+
+\item Unix I/O
+\begin{enumerate}
+	\item Pros
+	\begin{enumerate}
+		\item Most general and lowest overhead form of I/O
+		\item Provides functions for accessing file metadata
+		\item Functions are async-signal-safe and can be used safely in signal handlers
+	\end{enumerate}
+	\item Cons
+	\begin{enumerate}
+		\item Dealing with short counts is tricky and error prone
+		\item Efficient reading of text lines requires some form of buffering, also tricky and error prone
+		\item The above issues can be handled by standard I/O and RIO packages
+	\end{enumerate}
+\end{enumerate}
+\item Standard I/O
+\begin{enumerate}
+	\item Pros
+	\begin{enumerate}
+		\item Buffering increases efficiency by decreasing the number of \texttt{read}, \texttt{write} system calls
+		\item Short counts are handled automatically
+	\end{enumerate}
+	\item Cons
+	\begin{enumerate}
+		\item Provides no function for accessing file metadata
+		\item Not async-signal-safe. Not appropriate for signal handlers
+		\item Not appropriate for network sockets
+	\end{enumerate}
+\end{enumerate}
+
+\item Virtual Memory
+\begin{enumerate}
+	\item Uses main memory efficiently
+	\item Simplifies memory management
+	\item Isolates address spaces
+\end{enumerate}
+\end{enumerate}
+}\end{document}
