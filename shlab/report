@@ -1,0 +1,16 @@
+first implement signal handlers for sigtstp, sigint
+to exit out of shell
+
+The pdf said that it is required to check the return value of every single system call,
+so I used a wrapper function
+
+Now implement the eval function. I referred to the code in the textbook.
+Then implement builtin_cmd - quit, jobs, bg, fg
+
+Then it would be natural to implement do_bgfg
+implement it.
+
+Then I figured that I need the waitfg function...
+
+while implementing the eval function, I found out that I should check the return values of
+sigprocmask functions so implement wrappers for those mask functions
