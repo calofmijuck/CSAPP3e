@@ -2,6 +2,7 @@
  * tsh - A tiny shell program with job control
  *
  * <Put your student number and login ID here>
+ * 2017-18570
  * stu133
  */
 #include <stdio.h>
@@ -192,6 +193,7 @@ void eval(char *cmdline) {
         if(!bg) { // running in the foreground
             addjob(jobs, pid, FG, cmdline);
 
+
         } else { // running in the background
             printf("[%d] (%d) %s", pid2jid(pid), (int) pid, cmdline);
         }
@@ -283,6 +285,45 @@ int builtin_cmd(char **argv) {
  * do_bgfg - Execute the builtin bg and fg commands
  */
 void do_bgfg(char **argv) {
+    // Check if the job has second argument
+    if(argv[1] == NULL) {
+        printf("%s command requires PID or %%jobid argument\n", argv[0]);
+        return;
+    }
+
+    // Check if second argument is valid for the job
+    if(!isdigit(argv[1][0]) && argv[1][0] != '%') {
+        printf("%s: argument must be a PID or %%jobid\n", argv[0]);
+        return;
+    }
+
+    int jid = (argv[1][0] == '%' ? 1 : 0); // check if job id is given
+    struct job_t *job;
+
+    if(jid) { // job id is given
+        job = getjobjid(jobs, atoi(&argv[1][1])); // Get job id
+        if(job == NULL) { // is given job active ?
+            printf("%s: No such job\n", argv[1]);
+            return;
+        }
+    } else { // process id is given
+        job = getjobjid(jobs, (pid_t) atoi(argv[1]));
+        if(job == NULL) {
+            printf("(%d): No such process\n", atoi(argv[1]));
+            return;
+        }
+    }
+
+    if(!strcmp(argv[0], "bg")) {
+        job -> state = BG; // Set state to background
+        printf("[%d] (%d) %s", job -> jid, job -> pid, job -> cmdline);
+        Kill(-(job -> pid), SIGCONT); // send sigcont signal
+    } else {
+        job -> state = FG;
+        Kill(-(job -> pid), SIGCONT);
+        waitfg(job -> pid); // must wait for the foreground job to finish
+    }
+
     return;
 }
 
@@ -290,6 +331,9 @@ void do_bgfg(char **argv) {
  * waitfg - Block until process pid is no longer the foreground process
  */
 void waitfg(pid_t pid) {
+    while(fgpid(jobs) == pid) {
+        sleep(1); // run until fg job is done
+    }
     return;
 }
 
@@ -305,6 +349,26 @@ void waitfg(pid_t pid) {
  *     currently running children to terminate.
  */
 void sigchld_handler(int sig) {
+    pid_t pid;
+    int status;
+    int jobid;
+
+    // Hard part...
+    while((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) { // Start Reaping!
+        jobid = pid2jid(pid);
+
+        // Follow the explanation in p 781 of the textbook
+
+        if(WIFEXITED(status)) { // true if child has terminated normally
+            // ?
+        } else if(WIFSIGNALED(status)) { // child terminated by a signal
+            // WIFSIGNALED: Returns true if the child process terminated because of a signal that was not caught
+            printf("Job [%d] (%d) terminated by signal %d\n", jobid, (int) pid, WTERMSIG(status));
+        } else if(WIFSTOPPED(status)) {
+            getjobpid(jobs, pid) -> state = ST; // update to stopped
+            printf("Job [%d] (%d) stopped by signal %d\n", jobid, (int) pid, WSTOPSIG(status));
+        }
+    }
     return;
 }
 
