@@ -152,7 +152,7 @@ static void insert(void *ptr, size_t size) {
     return;
 }
 
-static void delete_node(void *ptr) {
+static void delete(void *ptr) {
     int idx = 0;
     size_t size = GET_SIZE(HDRP(ptr));
 
@@ -181,6 +181,45 @@ static void delete_node(void *ptr) {
 
     return;
 }
+
+static void *coalesce(void *ptr) {
+    // allocation status of prev, next
+    size_t prev = GET_ALLOC(HDRP(PREV_BLKP(ptr)));
+    size_t next = GET_ALLOC(HDRP(NEXT_BLKP(ptr)));
+    size_t size = GET_SIZE(HDRP(ptr));
+
+    // Does the block have reallocation tag?
+    if(GET_TAG(HDRP(PREV_BLCK(ptr)))) prev = 1;
+    // Case 1
+    if(prev && next) return ptr;
+    else if(prev && !next) { // Case 2
+        delete(ptr);
+        delete(NEXT_BLKP(ptr)); // delete next block
+        size += GET_SIZE(NEXT_BLKP(ptr)); // add size
+        PUT(HDRP(ptr), PACK(size, 0)); // update header
+        PUT(FTRP(NEXT_BLKP(ptr)), PACK(size, 0)); // update footer
+    } else if(!prev && next) { // Case 3
+        delete(ptr);
+        delete(PREV_BLKP(ptr)); // delete prev block
+        size += GET_SIZE(PREV_BLKP(ptr)); // add size
+        PUT(HDRP(PREV_BLKP(ptr)), PACK(size, 0)); // update header
+        PUT(FTRP(ptr), PACK(size, 0)); // update footer
+        ptr = PREV_BLKP(ptr); // set to prev block
+    } else { // Case 4
+        delete(ptr);
+        delete(NEXT_BLKP(ptr)); // delete next block
+        delete(PREV_BLKP(ptr)); // delete prev block
+        size += GET_SIZE(NEXT_BLKP(ptr));
+        size += GET_SIZE(PREV_BLKP(ptr)); // add size
+        PUT(HDRP(PREV_BLOCK(ptr)), PACK(size, 0));
+        PUT(FTRP(NEXT_BLOCK(ptr)), PACK(size, 0));
+        ptr = PREV_BLKK(ptr); // set to prev block
+    }
+    insert(ptr, size);
+
+    return ptr;
+}
+
 
 //////////////////////////////////////////////////////
 /*
