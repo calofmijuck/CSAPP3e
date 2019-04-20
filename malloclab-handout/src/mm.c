@@ -122,16 +122,16 @@ static void insert(void *ptr, size_t size) {
 
     // Search
     search_p = seg_list[idx];
-    while(!search_p && (size > GET_SIZE(HDRP(search_p)))) {
+    while(search_p && (size > GET_SIZE(HDRP(search_p)))) {
         insert_p = search_p;
         search_p = PRED(search_ptr);
     }
 
     // Set next, prev
-    if(!search_p) {
+    if(search_p) {
         SET_PTR(PRED_PTR(ptr), search_p);
         SET_PTR(SUCC_PTR(search_p), ptr);
-        if(!insert_p) {
+        if(insert_p) {
             SET_PTR(SUCC_PTR(ptr), insert_p);
             SET_PTR(PRED_PTR(insert_p), ptr);
         } else {
@@ -140,7 +140,7 @@ static void insert(void *ptr, size_t size) {
         }
     } else {
         SET_PTR(PRED_PTR(ptr), NULL);
-        if(!insert_p) {
+        if(insert_p) {
             SET_PTR(SUCC_PTR(ptr), insert_p);
             SET_PTR(PRED_PTR(insert_p), ptr);
         } else {
@@ -152,6 +152,35 @@ static void insert(void *ptr, size_t size) {
     return;
 }
 
+static void delete_node(void *ptr) {
+    int idx = 0;
+    size_t size = GET_SIZE(HDRP(ptr));
+
+    // Select from seg list
+    while((idx < LIST_N - 1) && (size > 1)) {
+        size >>= 1;
+        idx++;
+    }
+
+    // delete
+    if(PRED(ptr)) {
+        if(SUCC(ptr)) {
+            SET_PTR(SUCC_PTR(PRED(ptr)), SUCC(ptr));
+            SET_PTR(PRED_PTR(SUCC(ptr)), PRED(ptr));
+        } else {
+            SET_PTR(SUCC_PTR(PRED(ptr)), NULL);
+            seg_list[idx] = PRED(ptr);
+        }
+    } else {
+        if(SUCC(ptr)) {
+            SET_PTR(PRED_PTR(SUCC(ptr)), NULL);
+        } else {
+            seg_list[idx] = NULL;
+        }
+    }
+
+    return;
+}
 
 //////////////////////////////////////////////////////
 /*
