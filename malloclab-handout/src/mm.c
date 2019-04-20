@@ -81,7 +81,8 @@
 
 // First we need to define segregated list data strucutre
 // pointer to start of the list
-void *seg_list[LIST_N];
+void *l0 = 0, *l1 = 0, *l2 = 0, *l3 = 0, *l4 = 0, *l5 = 0, *l6 = 0, *l7 = 0, *l8 = 0, *l9 = 0, *l10 = 0, *l11 = 0, *l12 = 0, *l13 = 0, *l14 = 0, *l15 = 0, *l16 = 0, *l17 = 0, *l18 = 0, *l19 = 0;
+void **seg_list = &l19;
 
 // functions
 static void *extend_heap(size_t size);
@@ -175,7 +176,9 @@ static void delete(void *ptr) {
     } else {
         if(SUCC(ptr)) {
             SET_PTR(PRED_PTR(SUCC(ptr)), NULL);
-        } else seg_list[idx] = NULL;
+        } else {
+            seg_list[idx] = NULL;
+        }
     }
 
     return;
@@ -267,7 +270,29 @@ int mm_init(void) {
     // Initialize free list
     for(i = 0; i < LIST_N; ++i) {
         seg_list[i] = NULL;
+        // printf("%d: %d\n", i, (int) seg_list[i]);
     }
+
+    // printf("%d\n", (int) &l0);
+    // printf("%d\n", (int) &l1);
+    // printf("%d\n", (int) &l2);
+    // printf("%d\n", (int) &l3);
+    // printf("%d\n", (int) &l4);
+    // printf("%d\n", (int) &l5);
+    // printf("%d\n", (int) &l6);
+    // printf("%d\n", (int) &l7);
+    // printf("%d\n", (int) &l8);
+    // printf("%d\n", (int) &l9);
+    // printf("%d\n", (int) &l10);
+    // printf("%d\n", (int) &l11);
+    // printf("%d\n", (int) &l12);
+    // printf("%d\n", (int) &l13);
+    // printf("%d\n", (int) &l14);
+    // printf("%d\n", (int) &l15);
+    // printf("%d\n", (int) &l16);
+    // printf("%d\n", (int) &l17);
+    // printf("%d\n", (int) &l18);
+    // printf("%d\n", (int) &l19);
 
     // Allocate memory on heap
     if((long) (heap_st = mem_sbrk(4 * WSIZE)) == -1) return -1;
