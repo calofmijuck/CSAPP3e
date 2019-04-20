@@ -43,7 +43,7 @@
 #define PACK(size, alloc) ((size) | (alloc))
 
 // Read from ptr
-#define GET(ptr) (*(unsigned int *) (p))
+#define GET(ptr) (*(unsigned int *) (ptr))
 // write val to p with tag
 #define PUT(p, val) (*(unsigned int *) (p))
 // write val to p without tag
@@ -98,7 +98,7 @@ static void *extend_heap(size_t size) {
     nsize = ALIGN(size); // alignment
 
     // fails
-    if(ptr = mem_sbrk(nsize)) == (void *) -1) return NULL;
+    if((ptr = mem_sbrk(nsize)) == (void *) -1) return NULL;
 
     // Header and footer
     PUT_NOTAG(HDRP(ptr), PACK(nsize, 0));
@@ -124,7 +124,7 @@ static void insert(void *ptr, size_t size) {
     search_p = seg_list[idx];
     while(search_p && (size > GET_SIZE(HDRP(search_p)))) {
         insert_p = search_p;
-        search_p = PRED(search_ptr);
+        search_p = PRED(search_p);
     }
 
     // Set next, prev
@@ -189,7 +189,7 @@ static void *coalesce(void *ptr) {
     size_t size = GET_SIZE(HDRP(ptr));
 
     // Does the block have reallocation tag?
-    if(GET_TAG(HDRP(PREV_BLCK(ptr)))) prev = 1;
+    if(GET_TAG(HDRP(PREV_BLKP(ptr)))) prev = 1;
     // Case 1
     if(prev && next) return ptr;
     else if(prev && !next) { // Case 2
@@ -212,9 +212,9 @@ static void *coalesce(void *ptr) {
         delete(PREV_BLKP(ptr)); // delete prev block
         size += GET_SIZE(NEXT_BLKP(ptr));
         size += GET_SIZE(PREV_BLKP(ptr)); // add size
-        PUT(HDRP(PREV_BLOCK(ptr)), PACK(size, 0));
-        PUT(FTRP(NEXT_BLOCK(ptr)), PACK(size, 0));
-        ptr = PREV_BLKK(ptr); // set to prev block
+        PUT(HDRP(PREV_BLKP(ptr)), PACK(size, 0));
+        PUT(FTRP(NEXT_BLKP(ptr)), PACK(size, 0));
+        ptr = PREV_BLKP(ptr); // set to prev block
     }
     insert(ptr, size);
 
