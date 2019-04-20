@@ -401,7 +401,7 @@ void sigchld_handler(int sig) {
             Sio_putl(jobid);
             Sio_puts("] (");
             Sio_putl(pid);
-            Sio_puts(") terminated by signal ");
+            Sio_puts(") stopped by signal ");
             Sio_putl(WSTOPSIG(status));
             Sio_puts("\n");
             // printf("Job [%d] (%d) stopped by signal %d\n", jobid, (int) pid, WSTOPSIG(status));
