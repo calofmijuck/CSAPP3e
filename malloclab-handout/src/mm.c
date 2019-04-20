@@ -198,6 +198,7 @@ static void *coalesce(void *ptr) {
         size += GET_SIZE(NEXT_BLKP(ptr)); // add size
         PUT(HDRP(ptr), PACK(size, 0)); // update header
         PUT(FTRP(NEXT_BLKP(ptr)), PACK(size, 0)); // update footer
+        // PUT(FTRP(ptr), PACK(size, 0));
     } else if(!prev && next) { // Case 3
         delete(ptr);
         delete(PREV_BLKP(ptr)); // delete prev block
@@ -220,6 +221,40 @@ static void *coalesce(void *ptr) {
     return ptr;
 }
 
+/*
+ * place - Place block of asize bytes at start of free block bp
+ *         and split if remainder would be at least minimum block size
+ */
+static void *place(void *ptr, size_t asize) {
+    size_t csize = GET_SIZE(HDRP(ptr));
+    size_t rm = csize - asize;
+
+    delete(ptr);
+
+    if(rm <= 2 * DSIZE) { // remainder too small, do not split
+        // update header and footer
+        PUT(HDRP(ptr), PACK(csize, 1));
+        PUT(FTRP(ptr), PACK(csize, 1));
+    } else if(asize >= 100) { // request size is big. split
+        // Set rm of memory at ptr
+        PUT(HDRP(ptr), PACK(rm, 0));
+        PUT(FTRP(ptr), PACK(rm, 0));
+        // place asize of memory at next of ptr
+        PUT_NOTAG(HDRP(NEXT_BLKP(ptr)), PACK(asize, 1));
+        PUT_NOTAG(FTRP(NEXT_BLKP(ptr)), PACK(asize, 1));
+        insert(ptr, rm);
+        return NEXT_BLKP(ptr);
+    } else { // split
+        // Set asize memory at ptr
+        PUT(HDRP(ptr), PACK(asize, 1));
+        PUT(FTRP(ptr), PACK(asize, 1));
+        // place rm of memory at next of ptr
+        PUT_NOTAG(HDRP(NEXT_BLKP(ptr)), PACK(rm, 0));
+        PUT_NOTAG(FTRP(NEXT_BLKP(ptr)), PACK(rm, 0));
+        insert(NEXT_BLKP(ptr), rm);
+    }
+    return ptr;
+}
 
 //////////////////////////////////////////////////////
 /*
