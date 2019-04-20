@@ -1,0 +1,73 @@
+%!TEX encoding = utf-8
+\documentclass[12pt]{report}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\geometry{
+	top = 25mm,
+	left = 20mm,
+	right = 20mm,
+	bottom = 20mm
+}
+\geometry{a4paper}
+
+\pagenumbering{gobble}
+\renewcommand{\baselinestretch}{1.3}
+
+\definecolor{mGreen}{rgb}{0,0.6,0}
+\definecolor{mGray}{rgb}{0.5,0.5,0.5}
+\definecolor{mPurple}{rgb}{0.58,0,0.82}
+\definecolor{backgroundColour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	commentstyle=\color{mGreen},
+	keywordstyle=\color{mPurple},
+	numberstyle=\tiny\color{mGray},
+	stringstyle=\color{mGreen},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	captionpos=b,                    
+	keepspaces=true,                 
+	numbers=left,                    
+	numbersep=-40pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=4,
+	language=C,
+}
+
+\begin{document}
+\begin{center}
+\textbf{\Large System Programming - Shell Lab Report}\\
+\large 2019 Spring, 2017-18570 Sungchan Yi
+\end{center}
+
+The first thing that came to my mind was to implement the signal handlers for SIGTSTP and SIGINT, which would be used to exit out of a program inside the shell. The implementation wasn't very hard, I just fetched the PID of the foreground process and sent a kill signal to the process group.
+
+The pdf said that it is required to check the return value of every single system call, so I used a wrapper function that would check the return value for me. I wrote wrapper functions for \texttt{kill}, \texttt{fork}, with the first letter of each system call capitalized. (\texttt{Kill}, \texttt{Fork})
+
+Now the next thing to do was to implement the \texttt{eval}  function. I referred to the code in the textbook, which helped me a lot. Then I figured I had to implement \texttt{builtin\_cmd} function.
+
+The \texttt{builtin\_cmd} function should be able to handle \texttt{quit}, \texttt{jobs}, \texttt{bg} and \texttt{fg}. I just used \texttt{strcmp} to compare the input with the built in commands. And when it is a built in command, execute the command.
+
+If it's not a built in command, call \texttt{Fork} and \texttt{execve}. Furthermore, check whether the process should run in the background and use \texttt{addjob} to add the job to joblist.
+
+Next, it would be natural to implement \texttt{do\_bgfg} for \texttt{bg}, \texttt{fg} commands. This was the hard part. First I would check it the arguments are correct. Then I would determine whether the job id or process id was given. Then depending on the command, change the state of the job accordingly and send a SIGCONT signal. While implementing the part for \texttt{fg} command, I figured that I need the \texttt{waitfg} function because after the \texttt{fg} command, I have to wait for the foreground job to finish. So the shell must wait while the \texttt{fgpid(jobs)} is equal to given \texttt{pid}.
+
+Up to this part, pretty much of the functions were implemented. \texttt{sigchld\_handler} was left. The handler was quite confusing to implement, so I referred to the textbook for more details. The textbook had info on WIFEXITED, WIFSIGNALED, WTERMSIG, WIFSTOPPED, WSTOPSIG function. So I used them to check the state of the child process.
+
+While implementing the \texttt{eval} function, I also found out that I should check the return values of \texttt{sigprocmask} functions, to appropriately block the signals while forking a child process. So I also implemented wrappers for those mask functions, \texttt{Sigemptyset}, \texttt{Sigaddset}, \texttt{Sigprocmask}, and \texttt{Setpgid}.
+
+With those functions implemented, I blocked signals before \texttt{Fork} and unblocked signals before \texttt{execve}, in the child process, unblocked signals after \texttt{addjob} was called.
+
+The lab was pretty much done and I created a python script to check the test cases, and everything was OK.
+
+Then I noticed that I used \texttt{printf} functions, which are not aync-signal-safe. So in the signal handlers, I tried to use the \texttt{write} function, the only async-signal-safe function for printing. But to use a format string in write, I had to write to a buffer and then use \texttt{write}. But to write to a buffer, I needed \texttt{sprintf} function, which is not async-signal-safe. So I thought of using \texttt{for} loop to assign each character to a buffer, but that would violate the rule: "Keep your handlers simple as possible". So I disassembled the \texttt{tshref} and checked that they used \texttt{printf}. So I also stuck to \texttt{printf}.
+
+This homework was very interesting because I am really fond of the shell in Linux. It was a great chance writing my own shell.
+
+I asked TAs for how to handle the async-signal-safe functions, TAs suggested that I use the safe I/O functions. When I searched for SIO in the textbook, it used \texttt{\#include "csapp.h"}. So I went online and downloaded \texttt{csapp.h}, \texttt{csapp.c} and used the SIO functions from the header file. The \texttt{sigchld\_handler} function is now async-signal-safe.
+\end{document}
