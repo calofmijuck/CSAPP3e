@@ -30,24 +30,25 @@
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
 
 
-#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+// #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
 // Macros from code in textbook + My Macros
 #define WSIZE 4
 #define DSIZE 8
 #define INITCHUNKSIZE (1 << 6)
-
+#define CHUNKSIZE (1 << 12)
 #define LIST_N 20
+#define REALLOC_BUFFER  (1 << 7)
 
 // Pack size and alloc bit into a word
 #define PACK(size, alloc) ((size) | (alloc))
 
 // Read from ptr
-#define GET(ptr) (*(unsigned int *) (ptr))
+#define GET(ptr) (*(unsigned int *)(ptr))
 // write val to p with tag
-#define PUT(p, val) (*(unsigned int *) (p))
+#define PUT(p, val) (*(unsigned int *)(p) = (val) | GET_TAG(p))
 // write val to p without tag
-#define PUT_NOTAG(p, val) (*(unsigned int *) (p) = (val))
+#define PUT_NOTAG(p, val) (*(unsigned int *)(p) = (val))
 
 
 // size, alloc bit, tag bit at ptr
@@ -57,30 +58,30 @@
 
 // Set tag and remove tag at ptr
 #define SET_TAG(ptr) (GET(ptr) |= 2)
-#define DEL_TAG(ptr) (GET(ptr) &= ~2);
+#define DEL_TAG(ptr) (GET(ptr) &= ~2)
 
 // Address of block header / footer
-#define HDRP(ptr) ((char *) (ptr) - WSIZE)
-#define FTRP(ptr) ((char *) (ptr) + GET_SIZE(HDRP(ptr)) - DSIZE)
+#define HDRP(ptr) ((char *)(ptr) - WSIZE)
+#define FTRP(ptr) ((char *)(ptr) + GET_SIZE(HDRP(ptr)) - DSIZE)
 
 // next block, prev block
-#define NEXT_BLKP(bp) ((char *) (bp) + GET_SIZE(((char *) (bp) - WSIZE)))
-#define PREV_BLKP(bp) ((char *) (bp) - GET_SIZE(((char *) (bp) - DSIZE)))
+#define NEXT_BLKP(ptr) ((char *)(ptr) + GET_SIZE((char *)(ptr) - WSIZE))
+#define PREV_BLKP(ptr) ((char *)(ptr) - GET_SIZE((char *)(ptr) - DSIZE))
 
 // Next, prev free block entry
-#define PRED_PTR(ptr) ((char *) (ptr))
-#define SUCC_PTR(ptr) ((char *) + WSIZE)
+#define PRED_PTR(ptr) ((char *)(ptr))
+#define SUCC_PTR(ptr) ((char *)(ptr) + WSIZE)
 
 // Next, prev of free block on seg list
-#define PRED(ptr) (*(char **) (ptr))
-#define SUCC(ptr) (*(char **) (SUCC_PTR(ptr)))
+#define PRED(ptr) (*(char **)(ptr))
+#define SUCC(ptr) (*(char **)(SUCC_PTR(ptr)))
 
 // Set Pointer
-#define SET_PTR(p, ptr) (*(unsigned int *) (p) = (unsigned int) (ptr))
+#define SET_PTR(p, ptr) (*(unsigned int *)(p) = (unsigned int)(ptr))
 
 // First we need to define segregated list data strucutre
 // pointer to start of the list
-void **seg_list;
+void *seg_list[LIST_N];
 
 // functions
 static void *extend_heap(size_t size);
@@ -122,7 +123,7 @@ static void insert(void *ptr, size_t size) {
 
     // Search
     search_p = seg_list[idx];
-    while(search_p && (size > GET_SIZE(HDRP(search_p)))) {
+    while(search_p != NULL && (size > GET_SIZE(HDRP(search_p)))) {
         insert_p = search_p;
         search_p = PRED(search_p);
     }
@@ -174,9 +175,7 @@ static void delete(void *ptr) {
     } else {
         if(SUCC(ptr)) {
             SET_PTR(PRED_PTR(SUCC(ptr)), NULL);
-        } else {
-            seg_list[idx] = NULL;
-        }
+        } else seg_list[idx] = NULL;
     }
 
     return;
@@ -195,23 +194,23 @@ static void *coalesce(void *ptr) {
     else if(prev && !next) { // Case 2
         delete(ptr);
         delete(NEXT_BLKP(ptr)); // delete next block
-        size += GET_SIZE(NEXT_BLKP(ptr)); // add size
+        size += GET_SIZE(HDRP(NEXT_BLKP(ptr))); // add size
         PUT(HDRP(ptr), PACK(size, 0)); // update header
-        PUT(FTRP(NEXT_BLKP(ptr)), PACK(size, 0)); // update footer
-        // PUT(FTRP(ptr), PACK(size, 0));
+        // PUT(FTRP(NEXT_BLKP(ptr)), PACK(size, 0)); // update footer
+        PUT(FTRP(ptr), PACK(size, 0));
     } else if(!prev && next) { // Case 3
         delete(ptr);
         delete(PREV_BLKP(ptr)); // delete prev block
-        size += GET_SIZE(PREV_BLKP(ptr)); // add size
-        PUT(HDRP(PREV_BLKP(ptr)), PACK(size, 0)); // update header
+        size += GET_SIZE(HDRP(PREV_BLKP(ptr))); // add size
         PUT(FTRP(ptr), PACK(size, 0)); // update footer
+        PUT(HDRP(PREV_BLKP(ptr)), PACK(size, 0)); // update header
         ptr = PREV_BLKP(ptr); // set to prev block
     } else { // Case 4
         delete(ptr);
-        delete(NEXT_BLKP(ptr)); // delete next block
         delete(PREV_BLKP(ptr)); // delete prev block
-        size += GET_SIZE(NEXT_BLKP(ptr));
-        size += GET_SIZE(PREV_BLKP(ptr)); // add size
+        delete(NEXT_BLKP(ptr)); // delete next block
+        size += GET_SIZE(HDRP(NEXT_BLKP(ptr)));
+        size += GET_SIZE(HDRP(PREV_BLKP(ptr))); // add size
         PUT(HDRP(PREV_BLKP(ptr)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(ptr)), PACK(size, 0));
         ptr = PREV_BLKP(ptr); // set to prev block
@@ -280,7 +279,7 @@ int mm_init(void) {
     PUT_NOTAG(heap_st + (3 * WSIZE), PACK(0, 1));
 
     // extend heap
-    if(!extend_heap(INITCHUNKSIZE)) return -1;
+    if(extend_heap(INITCHUNKSIZE) == NULL) return -1;
 
     return 0;
 }
@@ -289,41 +288,109 @@ int mm_init(void) {
  * mm_malloc - Allocate a block by incrementing the brk pointer.
  *     Always allocate a block whose size is a multiple of the alignment.
  */
-void *mm_malloc(size_t size)
-{
-    int newsize = ALIGN(size + SIZE_T_SIZE);
-    void *p = mem_sbrk(newsize);
-    if (p == (void *)-1)
-	return NULL;
-    else {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
+void *mm_malloc(size_t size) {
+    size_t asize; // adjust size
+    size_t ext_size; // extended size
+    void *ptr = NULL;
+
+    // size 0
+    if(size == 0) return NULL;
+    if(size <= DSIZE) asize = 2 * DSIZE;
+    else asize = ALIGN(size + DSIZE);
+
+    int idx = 0;
+    size_t ssize = asize; // search size
+    // Search for free block in seglist
+    while(idx < LIST_N) {
+        if(idx == LIST_N - 1 || ((ssize <= 1) && seg_list[idx] != NULL)) {
+            ptr = seg_list[idx];
+            // ignore blocks with realloc bit
+            // ignore small blocks
+            while(ptr != NULL && (asize > GET_SIZE(HDRP(ptr)) || (GET_TAG(HDRP(ptr))))) {
+                ptr = PRED(ptr);
+            }
+            if(ptr != NULL) break;
+        }
+        ssize >>= 1;
+        idx++;
     }
+
+    // if not found, extend heap
+    if(ptr == NULL) {
+        ext_size = asize > CHUNKSIZE ? asize : CHUNKSIZE;
+        if((ptr = extend_heap(ext_size)) == NULL) return NULL;
+    }
+
+    // Place block, split if necessary
+    ptr = place(ptr, asize);
+    return ptr;
 }
 
 /*
  * mm_free - Freeing a block does nothing.
  */
-void mm_free(void *ptr)
-{
+void mm_free(void *ptr) {
+    size_t size = GET_SIZE(HDRP(ptr)); // HDRP(ptr) !!!
+
+    // Remove tag
+    DEL_TAG(HDRP(NEXT_BLKP(ptr)));
+    // Update header / footer
+    PUT(HDRP(ptr), PACK(size, 0));
+    PUT(FTRP(ptr), PACK(size, 0));
+
+    // insert to seg_list
+    insert(ptr, size);
+    coalesce(ptr);
+
+    return;
 }
 
 /*
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
+ * mm_realloc - using reallocation tags to maximize utilization
  */
-void *mm_realloc(void *ptr, size_t size)
-{
-    void *oldptr = ptr;
-    void *newptr;
-    size_t copySize;
+void *mm_realloc(void *ptr, size_t size) {
+    void *ret = ptr; // return pointer
+    size_t nsize = size; // new size
+    int remainder;
+    int esize; // extended size
+    int block_buffer;
 
-    newptr = mm_malloc(size);
-    if (newptr == NULL)
-      return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
-      copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
-    return newptr;
+    if(!size) return NULL; // ignore size 0
+
+    // Align block size
+    if(nsize <= DSIZE) nsize = 2 * DSIZE;
+    else nsize = ALIGN(size + DSIZE);
+
+    // overhead requirements
+    nsize += REALLOC_BUFFER;
+    block_buffer = GET_SIZE(HDRP(ptr)) - nsize;
+
+    // Allocate more space if overhead falls below the minimum
+    if(block_buffer < 0) {
+        // Is next block a free block? or the epilogue block?
+        if(!GET_ALLOC(HDRP(NEXT_BLKP(ptr))) ||  !GET_SIZE(HDRP(NEXT_BLKP(ptr)))) {
+            remainder = GET_SIZE(HDRP(ptr)) + GET_SIZE(HDRP(NEXT_BLKP(ptr)))  - nsize;
+            if(remainder < 0) {
+                esize = -remainder > CHUNKSIZE ? -remainder : CHUNKSIZE;
+                if(extend_heap(esize) == NULL) return NULL;
+                remainder += esize;
+            }
+            delete(NEXT_BLKP(ptr));
+
+            // Do not split block
+            PUT_NOTAG(HDRP(ptr), PACK(nsize + remainder, 1));
+            PUT_NOTAG(FTRP(ptr), PACK(nsize + remainder, 1));
+        } else {
+            ret = mm_malloc(nsize - DSIZE);
+            memcpy(ret, ptr, size > nsize ? nsize : size);
+            mm_free(ptr);
+        }
+        block_buffer = GET_SIZE(HDRP(ret)) - nsize;
+    }
+
+    // Tag the next block if block overhead drops below twice the overhead
+    if (block_buffer < 2 * REALLOC_BUFFER)
+        SET_TAG(HDRP(NEXT_BLKP(ret)));
+
+    return ret;
 }
