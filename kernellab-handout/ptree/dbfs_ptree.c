@@ -40,7 +40,7 @@ static int __init dbfs_module_init(void) { // will be executed on initialization
 		printk("Cannot create ptree dir\n");
 		return -1;
 	}
-	
+
 	// struct dentry *debugfs_create_file(const char *name, umode_t mode,
 	//									  struct dentry *parent, void *data,
 	//                                    const struct file_operations *fops)
@@ -50,13 +50,13 @@ static int __init dbfs_module_init(void) { // will be executed on initialization
 	//								  	  sturct dentry *parent,
 	//                                    struct debugfs_blob_wrapper *blob)
 	ptreedir = debugfs_create_blob("ptree", S_IRUSR, dir, &blob);
-	printk("dbfs_ptree module initialize done\n");
+	// printk("dbfs_ptree module initialize done\n");
 	return 0;
 }
 
 static void __exit dbfs_module_exit(void) { // executed on exit
 	// Implement exit module code
-	printk("dbfs_ptree module exit\n");
+	// printk("dbfs_ptree module exit\n");
 }
 
 module_init(dbfs_module_init);
