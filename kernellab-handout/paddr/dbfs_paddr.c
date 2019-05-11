@@ -30,19 +30,19 @@ static ssize_t read_output(struct file *fp,
 	pmd_t *pmd; // page middle directory
 	pte_t *pte; // page table entry / page table itself
 
-    // virtual page number for each table level, virtual page offset
+	// virtual page number for each table level, virtual page offset
 	unsigned long vpn1, vpn2, vpn3, vpn4, vpo;
-    unsigned long vaddr_tmp;
+	unsigned long vaddr_tmp;
 
 	pckt = (struct packet*) user_buffer;
 
-    vaddr_tmp = pckt -> vaddr;
+	vaddr_tmp = pckt -> vaddr;
 
-    // mask out addresses
-    vpo = vaddr_tmp & 0xFFF; // mask out last 12 bits
-    vpn4 = (vaddr_tmp >>= 12) & 0x1FF; // next 9 bits for each levels
-    vpn3 = (vaddr_tmp >>= 9) & 0x1FF;
-    vpn2 = (vaddr_tmp >>= 9) & 0x1FF;
+	// mask out addresses
+	vpo = vaddr_tmp & 0xFFF; // mask out last 12 bits
+	vpn4 = (vaddr_tmp >>= 12) & 0x1FF; // next 9 bits for each levels
+	vpn3 = (vaddr_tmp >>= 9) & 0x1FF;
+	vpn2 = (vaddr_tmp >>= 9) & 0x1FF;
 	vpn1 = (vaddr_tmp >>= 9) & 0x1FF;
 
 	task = pid_task(find_get_pid(pckt -> pid), PIDTYPE_PID); // get task_struct
@@ -66,7 +66,7 @@ static const struct file_operations dbfs_fops = {
 };
 
 static int __init dbfs_module_init(void) {
-    // Nothing much to do on init
+	// Nothing much to do on init
 	// Implement init module
 	dir = debugfs_create_dir("paddr", NULL);
 	if (!dir) {
@@ -77,13 +77,13 @@ static int __init dbfs_module_init(void) {
 	// Fill in the arguments below
 	output = debugfs_create_file("output", S_IWUSR, dir, NULL, &dbfs_fops);
 
-    // printk("dbfs_paddr module initialize done\n");
+	// printk("dbfs_paddr module initialize done\n");
 	return 0;
 }
 
 static void __exit dbfs_module_exit(void) {
-    // Implement exit module code
-    // printk("dbfs_paddr module exit\n");
+	// Implement exit module code
+	// printk("dbfs_paddr module exit\n");
 }
 
 module_init(dbfs_module_init);
