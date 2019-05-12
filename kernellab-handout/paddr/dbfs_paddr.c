@@ -26,37 +26,39 @@ static ssize_t read_output(struct file *fp,
 	// Implement read file operation
 	struct packet *pckt; // packet
 	pgd_t *pgd; // page global directory
+	p4d_t *p4d; // ?
 	pud_t *pud; // page upper directory
 	pmd_t *pmd; // page middle directory
 	pte_t *pte; // page table entry / page table itself
 
-	// virtual page number for each table level, virtual page offset
-	unsigned long vpn1, vpn2, vpn3, vpn4, vpo;
-	unsigned long vaddr_tmp;
+	struct page* pg;
 
 	pckt = (struct packet*) user_buffer;
 
-	vaddr_tmp = pckt -> vaddr;
-
-	// mask out addresses
-	vpo = vaddr_tmp & 0xFFF; // mask out last 12 bits
-	vpn4 = (vaddr_tmp >>= 12) & 0x1FF; // next 9 bits for each levels
-	vpn3 = (vaddr_tmp >>= 9) & 0x1FF;
-	vpn2 = (vaddr_tmp >>= 9) & 0x1FF;
-	vpn1 = (vaddr_tmp >>= 9) & 0x1FF;
-
 	task = pid_task(find_get_pid(pckt -> pid), PIDTYPE_PID); // get task_struct
 
-	pgd = task -> mm -> pgd; // get mm_struct and first page table
+	// get pgd from task -> mm
+	pgd = pgd_offset(task -> mm, pckt -> vaddr);
 
-	// get location of pud from pgd
-	pud = (pud_t *) offset((pgd + vpn1) -> pgd);
-	// get location of pmd from pud
-	pmd = (pmd_t *) offset((pud + vpn2) -> pud);
-	// get location of pte from pmd
-	pte = (pte_t *) offset((pmd + vpn3) -> pmd);
-	// get physical address from pte and use virtual page offset here
-	pckt -> paddr = ((pte + vpn4) -> pte & 0xFFFFFFFFFF000) + vpo;
+	// get p4d from pgd
+	p4d = p4d_offset(pgd, pckt -> vaddr);
+
+	// get pud from p4d
+	pud = pud_offset(p4d, pckt -> vaddr);
+
+	// get pmd from pud
+	pmd = pmd_offset(pud, pckt -> vaddr);
+
+	// get pte from pmd
+	pte = pte_offset_map(pmd, pckt -> vaddr);
+
+	// get page
+	pg = pte_page(*pte);
+
+	// map page to physical address
+	pckt -> paddr = page_to_phys(pg);
+	pte_unmap(pte);
+
 	return 0;
 }
 
