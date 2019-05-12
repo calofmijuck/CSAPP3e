@@ -77,13 +77,14 @@ static int __init dbfs_module_init(void) {
 	// Fill in the arguments below
 	output = debugfs_create_file("output", S_IWUSR, dir, NULL, &dbfs_fops);
 
-	// printk("dbfs_paddr module initialize done\n");
+	printk("dbfs_paddr module initialize done\n");
 	return 0;
 }
 
 static void __exit dbfs_module_exit(void) {
 	// Implement exit module code
-	// printk("dbfs_paddr module exit\n");
+	printk("dbfs_paddr module exit\n");
+	debugfs_remove_recursive(dir);
 }
 
 module_init(dbfs_module_init);

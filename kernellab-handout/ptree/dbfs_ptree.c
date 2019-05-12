@@ -57,6 +57,7 @@ static int __init dbfs_module_init(void) { // will be executed on initialization
 static void __exit dbfs_module_exit(void) { // executed on exit
 	// Implement exit module code
 	// printk("dbfs_ptree module exit\n");
+	debugfs_remove_recursive(dir);
 }
 
 module_init(dbfs_module_init);
