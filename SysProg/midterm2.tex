@@ -505,4 +505,140 @@
 	\end{itemize}
 \end{itemize}
 
+\pagebreak
+
+\cname{Concurrent Programming}
+\begin{itemize}
+	\item Hard!
+	\begin{itemize}
+		\item Human mind is sequential, misleading notion of time
+		\item Considering all possibilities of \textbf{interleaving} is impossible
+		\item \textbf{Races}: Outcome depends on arbitrary scheduling decisions
+		\item \textbf{Deadlock}: Improper resource allocation preventing progress, stuck waiting for an event that will never happen
+		\item Livelock, starvation, fairness etc.
+	\end{itemize}
+	\item \textbf{Concurrent Servers}
+	\begin{itemize}
+		\item \textbf{Process}-based: Automatic interleaving by kernel, private address space for each flow
+		\item \textbf{Event}-based: Manual interleaving, shared address space, \textit{I/O multiplexing}
+		\item \textbf{Thread}-based: Automatic interleaving by kernel, shared address space (Mixup)
+	\end{itemize}
+	\item \textbf{Process Based Server}
+	\begin{itemize}
+		\item Separate process for each client (\texttt{fork})
+		\item Must reap all zombie children
+		\item \texttt{accept} process
+		\begin{enumerate}
+			\item Server blocks in \texttt{accept}, waits for connection request on \texttt{listenfd}
+			\item Client makes connection request by \texttt{connect}
+			\item Server returns \texttt{connfd} from \texttt{accept}, \textit{Forks child to handle client}
+			\item Connection between \texttt{clientfd} and \texttt{connfd} is established  
+		\end{enumerate}
+		\item \textit{No shared states between clients}
+		\item Both parent \& child have copies of \texttt{listenfd} and \texttt{connfd}: parent should close \texttt{connfd}, child should close \texttt{listenfd} (considering \texttt{refcnt})
+		\item Pros
+		\begin{itemize}
+			\item Clean sharing model - file tables (o), descriptors/global var.(x)
+			\item Simple and straightforward
+		\end{itemize}
+		\item Cons
+		\begin{itemize}
+			\item Additional overhead for process control
+			\item Hard to share data between processes (IPC)
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Event Based Server}
+	\begin{itemize}
+		\item Maintains a set of active connections by an array of \texttt{connfd}s
+		\item Repeats:
+		\begin{itemize}
+			\item \texttt{select} which descriptors have pending inputs
+			\item If \texttt{listenfd} has input, \texttt{accept} the connection
+			\item Add new \texttt{connfd} to array
+			\item Service all \texttt{connfd}s with pending inputs
+		\end{itemize}
+		\item Pros
+		\begin{itemize}
+			\item One logical control flow and shared address space
+			\item Can single step with debugger
+			\item No process or thread control overhead
+			\item Gives programmers more control over the behavior
+		\end{itemize}
+		\item Cons
+		\begin{itemize}
+			\item Too complex
+			\item Hard to provide fine-grained concurrency
+			\item Cannot take advantage of multi-core (single control)
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Thread}: Logical flow that runs in the context of a process
+	\begin{itemize}
+		\item \textbf{Thread context}: Registers, Condition Codes, Stack Pointer, Program Counter, Thread ID, own stack (for local var)
+		\item Threads share same code, data, and kernel context (VA space)
+		\item Threads $\approx$ pools of concurrent flow that access the same data\footnote{Processes form a tree hierarchy, where threads do not}
+		\item Concurrent if flows overlap in time
+	\end{itemize}
+	\item \textbf{Threads vs. Processes}
+	\begin{itemize}
+		\item Similarities
+		\begin{itemize}
+			\item Own logical control flow
+			\item Can run concurrently with others
+			\item Context switching
+		\end{itemize}
+		\item \textbf{Differences}
+		\begin{itemize}
+			\item Threads share all code and data (except local stacks)
+			\item Threads are less expensive than processes (they have less context)
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Posix Threads} (\texttt{pthreads}) \textbf{Interface}
+	\begin{itemize}
+		\item Standard interface that manipulate threads from C programs
+		\item Creating Threads
+		\begin{itemize}
+			\item \texttt{int pthread\_create(pthread\_t *tid, NULL, func *f, void *arg);}
+			\item \texttt{tid}: contains id of created thread
+			\item \texttt{f}: thread routine
+			\item \texttt{arg}: arguments for \texttt{f}
+		\end{itemize}
+		\item Terminating Threads
+		\begin{itemize}
+			\item \texttt{void pthread\_exit(void *thread\_return);}
+			\item \texttt{int pthread\_cancel(pthread\_t tid);}
+			\item Terminates the thread with \texttt{tid}
+		\end{itemize}
+		\item Reaping Threads
+		\begin{itemize}
+			\item \texttt{int pthread\_join(pthread\_t tid, void **thread\_return);}
+			\item Blocks until thread \texttt{tid} terminates, and reaps terminated thread
+			\item Can only wait for a specific thread
+		\end{itemize}
+		\item Detaching Threads
+		\begin{itemize}
+			\item Joinable thread: Can be reaped and killed by other threads, memory is not freed until reaped.
+			\item Detached thread: Cannot be reaped by other threads, memory is freed automatically on termination
+			\item \texttt{int pthread\_detach(pthread\_t tid);}
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Thread Based Server}
+	\begin{itemize}
+		\item Run only detached threads: reaped automatically
+		\item Free \texttt{vargp}, \texttt{close(connfd)} necessary
+		\item Each client handled by each peer thread
+		\item Careful to avoid unintended sharing (\texttt{malloc})
+		\item Functions in the thread routine must be thread-safe
+		\item Pros
+		\begin{itemize}
+			\item Easy to share data between threads (perhaps too easy)
+			\item Efficient than processes (cheaper context switch)
+		\end{itemize}
+		\item Cons
+		\begin{itemize}
+			\item Unintended sharing
+			\item Difficult to debug
+		\end{itemize}
+	\end{itemize}
+\end{itemize}
+
 }\end{document}
