@@ -640,5 +640,147 @@
 		\end{itemize}
 	\end{itemize}
 \end{itemize}
+\pagebreak
+
+\cname{Synchronization}
+\begin{itemize}
+	\item \textbf{Threads Memory Model}
+	\begin{itemize}
+		\item Variable shared $\iff$ Multiple threads reference the variable
+		\item Multiple threads run within the context of a single process
+		\item Threads have its own thread context (TID, SP, PC, CC, REG)
+		\item Share the remaining process context
+	\end{itemize}
+	\item \textbf{Variable Instances in Memory}
+	\begin{itemize}
+		\item Global Variables: Exactly one instance
+		\item Local Variables: Each thread stack has one instance each
+		\item Local \textit{Static} Variables: Exactly one instance\footnote{It's similar to global variables, just that its scope is limited to the function}
+	\end{itemize}
+	\item \textbf{Concurrent Execution \& Process Graphs}
+	\begin{itemize}
+		\item Interleaving of any order possible; May cause errors
+		\item \textbf{Process Graph} depicts the discrete \textit{execution state space} of concurrent threads
+		\item Axis: sequential order of instructions in a thread
+		\item Each point: Possible \textit{execution state}
+		\item Trajectory: is a sequence of legal state \textit{transitions} of possible concurrent execution (one set of interleaving)
+		\item \textbf{Critical Section} (w.r.t a shared var): load $\sim$ store instruction
+		\item Instructions in critical section should not be interleaved
+		\item \textbf{Unsafe Region}: Intersection of critical sections
+		\item Trajectory is \textit{safe} $\iff$ does not pass unsafe region
+		\item Enforce \textbf{mutual exclusion} to \textbf{synchronize} the execution of threads so that they can never have an unsafe trajectory
+	\end{itemize}
+	\item \textbf{Semaphores}: Non-negative global integer synchronization variable
+	\begin{itemize}
+		\item Mainpulated by \texttt{P}, \texttt{V} operations
+		\item \texttt{P(s)} (= Lock)
+		\begin{itemize}
+			\item If $s\neq 0$, \texttt{s--} and return (happens atomically)
+			\item If $s=0$, \textbf{suspend} until $s\neq 0$, and the thread is restarted by a \texttt{V} operation
+			\item After restart, \texttt{P} decrements \texttt{s} and returns control to caller
+		\end{itemize}
+		\item \texttt{V(s)} (= Unlock)
+		\begin{itemize}
+			\item \texttt{s++} and return
+			\item If any threads blocked in \texttt{P} are waiting, restart exactly one of those threads,\footnote{You don't know which will be restarted...} which enables \texttt{P} to decrement \texttt{s}.
+		\end{itemize}
+		\item \textbf{Semaphore Invariant}: $s\geq 0$
+	\end{itemize}
+	\item \textbf{Semaphores for Synchronization}
+	\begin{itemize}
+		\item Associate a unique semaphore \textbf{mutex} (initially 1) with each shared var
+		\item Surround corresponding critical sections with \texttt{P}, \texttt{V} operations
+		\item \textit{Binary Semaphores}: Value is 0 or 1
+		\item \textit{Mutex}: Binary semaphores for \textbf{mut}ual \textbf{ex}clusion
+		\item \textit{Counting Semaphore}: Counter for set of available resources
+		\item Synchronization makes programs run slower
+		\item The semaphore invariant surrounds critical sections, which is the \textit{forbidden region}
+		\item Semaphore is $<0$ in the forbidden region, therefore cannot be passed by any trajectory
+	\end{itemize}
+	\item \textbf{Semaphores to Coordinate Access to Shared Resources}
+	\begin{itemize}
+		\item Semaphore operation to notify another thread that some condition has become true
+		\item Use counting semaphores to keep track of resource state
+		\item Mutex for protecting access to the resource
+	\end{itemize}
+	\item \textbf{Producer-Consumer Problem}
+	\begin{itemize}
+		\item They share a bounded buffer with $n$ slots
+		\item Producer produces new items, inserts them to the buffer, notify consumer
+		\item Consumer consumes items, removes them from the buffer, notify producer
+		\item \texttt{sbuf} (shared buffer) package
+		\item \texttt{slots}: counts available slots in the buffer
+		\item \textit{items}: counts available items in the buffer
+	\end{itemize}
+	\item \textbf{Reader-Writers Problem}
+	\begin{itemize}
+		\item Reader threads only read object
+		\item Writer threads modify the object $\rightarrow$ Must have exclusive access
+		\item Unlimited readers can access the object
+		\item \textit{First readers-writers problem} (Reader Favoring)
+		\begin{itemize}
+			\item No reader should be kept waiting if writer doesn't have access
+			\item Reader has priority over writers
+			\item Starvation for writers may happen
+		\end{itemize} 
+		\item \textit{Second readers-writers problem} (Writer Favoring)
+		\begin{itemize}
+			\item Once a writer is ready to write, performs write ASAP
+			\item Readers that arrive after a writer must wait, even if the writer is also waiting
+			\item Starvation for readers may happen
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Prethreaded Concurrent Server}
+	\begin{itemize}
+		\item Creating/reaping thread is expensive! Maintain a set of worker threads!
+		\item Server consists of main thread and a set of worker threads
+		\item Main thread repeatedly accepts connection from clients and places \texttt{connfd} in a bounded buffer
+		\item Each worker thread removes \texttt{connfd} from the buffer, services client and waits for the next descriptor
+	\end{itemize}
+	\item \textbf{Thread Safety}
+	\begin{itemize}
+		\item Functions called in a thread routine must be \textbf{thread safe}
+		\item Thread Safe $\iff$ Always produces correct results when called repeatedly from multiple concurrent threads
+		\item Classes of unsafe functions
+		\begin{enumerate}
+			\item Functions that do not protect \textit{shared variables}
+			\begin{itemize}
+				\item Use \texttt{P}, \texttt{V} operations to synchronize
+			\end{itemize}
+			\item Functions that keep \textit{states across multiple invocations}
+			\begin{itemize}
+				\item Modify function to be \textit{re-entrant}
+			\end{itemize}
+			\item Functions that return a \textit{pointer to a static variable}
+			\begin{itemize}
+				\item Rewrite function so caller passes address of variable to store result
+				\item Lock and copy: Lock and copy to a another private memory location to store the result (write a wrapper function)
+			\end{itemize}
+			\item Functions that call other unsafe functions
+			\begin{itemize}
+				\item Just don't call them
+			\end{itemize}
+		\end{enumerate}
+	\end{itemize}	
+	\item \textbf{Reentrancy}
+	\begin{itemize}
+		\item Function is \textbf{reentrant} $\iff$ Does not access shared variables when called by multiple threads
+		\item Requires no synchronization process (which is expensive)
+	\end{itemize}
+	\item \textbf{Race Conditions}
+	\begin{itemize}
+		\item Race when the correctness of program depends on on thread reaching point $ x $ before another thread reaches $ y $
+		\item Happens usually when programmer assumes some particular trajectory
+		\item Avoid unintended sharing to prevent races
+	\end{itemize}
+	\item \textbf{Deadlocks}
+	\begin{itemize}
+		\item Deadlock $\iff$ Waiting for a condition that will never be true
+		\item \texttt{P} operation is a potential problem because it blocks
+		\item Trajectory entering deadlock region will reach deadlock state
+		\item Often non-deterministic
+		\item Fix: Acquire shared resources in the same order
+	\end{itemize}
+\end{itemize}
 
 }\end{document}
