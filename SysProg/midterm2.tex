@@ -1,0 +1,868 @@
+%!TEX encoding = utf-8
+\documentclass[12pt]{article}
+\usepackage{kotex}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\geometry{
+	top = 15mm,
+	left = 10mm,
+	right = 10mm,
+	bottom = 15mm
+}
+\geometry{a4paper}
+
+\pagenumbering{gobble}
+\renewcommand{\baselinestretch}{1.2}
+\newcommand{\cname}[1]{\large \textbf{#1}}
+\definecolor{mGreen}{rgb}{0,0.6,0}
+\definecolor{mGray}{rgb}{0.5,0.5,0.5}
+\definecolor{mPurple}{rgb}{0.58,0,0.82}
+\definecolor{backgroundColour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	commentstyle=\color{mGreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{mGray},
+	stringstyle=\color{mPurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	captionpos=b,                    
+	keepspaces=true,                 
+	numbers=left,                    
+	numbersep=-10pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=4,
+	language=C,
+}
+
+\begin{document}{\sffamily
+\begin{center}
+	\textbf{\large 2019 Spring - System Programming Midterm 2}
+\end{center}
+\cname{Virtual Memory}
+\begin{itemize}
+	\item Why do we use VM?
+	\begin{itemize}
+		\item Use main memory efficiently (caching)
+		\item Simplify memory management (each process has its own virtual address space)
+		\item Isolate address spaces (protection: extend PTE with permission bits)
+	\end{itemize}
+	\item Address Translation
+	\begin{itemize}
+		\item (Only with Page Table)\\
+		Processor $\overset{\text{VA}}{\longrightarrow}$ MMU $\overset{\text{PTEA}}{\longrightarrow}$ Page Table $\overset{\text{PTE}}{\longrightarrow}$ MMU. If hit, done.\\
+		(Miss) Page Fault Exception/Handler fetches page and updates PTE.
+		\item (TLB)\\
+		MMU uses the VPN portion of the VA to access the TLB
+	\end{itemize}
+	\item \textbf{Translation Lookaside Buffer}
+	\begin{itemize}
+		\item Small cache of page table entries in the memory management unit
+		\item Virtually addressed cache where each line holds a block consisting of a single PTE
+		\item \textbf{TLB hit} eliminates the memory accesses required to do a page table lookup\footnote{If $k$-level page table is used, we need $k$ memory accesses...}
+	\end{itemize}
+	\item Linux Page Fault Handling
+	\begin{itemize}
+		\item Is the VA legal? (Segmentation Fault)
+		\item Is the memory access legal? (Protection)
+	\end{itemize}
+	\item Memory Mapping
+	\begin{itemize}
+		\item VM areas initialized by associating them with disk objects
+		\item Area gets its initial values from \textit{regular file} or \textit{anonymous file}
+		\item Dirty pages are copied back and forth between memory and swap file
+	\end{itemize}
+\end{itemize}
+
+\pagebreak
+\cname{Dynamic Memory Allocation}
+\begin{itemize}
+	\item Why do we use dynamic memory allocation?
+	\begin{itemize}
+		\item Acquire VM at runtime (size of data unknown until runtime)
+		\item Manage VM of each process (heap)
+	\end{itemize}
+	\item Requirements and Goals for Memory Allocators
+	\begin{itemize}
+		\item Requirements
+		\begin{itemize}
+			\item Can't control number or size of blocks
+			\item Immediate response to requests
+			\item Allocation only in free memory
+			\item Alignment (8/16 byte - 32/64 bit machine)
+			\item Can't move allocated blocks (No compaction)
+		\end{itemize}
+		\item Goals (Maximize)
+		\begin{itemize}
+			\item \textbf{Throughput}: Number of completed requests per unit time
+			\item \textbf{Peak Memory Utilization}: After $k$ requests, aggregate payload $P_k$: the sum of currently allocated payloads, heap size $H_k$, then $$U_k = \frac{\max_{i\leq k} P_i}{H_k}$$
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Fragmentation}: Unused memory is not available to satisfy allocate requests
+	\begin{itemize}
+		\item Internal Fragmentation: Payload is smaller than block size
+		\begin{itemize}
+			\item Overhead of maintaining heap data structures
+			\item Paddings for alignment
+			\item Policy decisions ...
+		\end{itemize}
+		\item External Fragmentation: Enough free memory but no single block is large enough
+		\begin{itemize}
+			\item Depends on future requests
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Implict Free List}: Free blocks linked implicitly by the size fields in the headers
+	\begin{itemize}
+		\item Header + Payload + (Optional) Padding
+		\item Header contains size and allocation status
+		\item Allocation status at the LSB of the header (Useable due to alignment)
+		\item Linear time allocation
+	\end{itemize}
+	\item \textbf{Placement Policy}: Where to allocated the requested block?
+	\begin{itemize}
+		\item Trading off throughput for less fragmentation
+		\item First Fit: Search whole list, choose first free block that fits
+		\item Next Fit: Start search where the previous search left off
+		\item Best Fit: Search whole list, choose the block with least fragmentation
+		\item Allocated space might be smaller than the free space $\rightarrow$ Split (maybe)
+	\end{itemize}
+	\item \textbf{Coalescing}: Merge adjacent free blocks
+	\begin{itemize}
+		\item \textit{False Fragmentation}: Large enough free memory chopped up into small free blocks, and therefore unusable
+		\item Immediate Coalescing: Coalesce each time a block is freed
+		\item Deferred Coalescing: Do it some later time (ex. when some allocation fails, when scanning the list, when external fragmentation reaches some limit)
+	\end{itemize}
+	\item \textbf{Boundary Tags}
+	\begin{itemize}
+		\item Replicate header into footer
+		\item Used for coalescing previous blocks: constant time coalescing possible
+		\item Internal fragmentation: extra space for footer can use a lot of memory due to alignment.
+		\item \textbf{Fix}. For allocated blocks, use the second LSB to contain allocation status of the previous block and remove footer. (Free blocks still need footer)
+	\end{itemize}
+	\item \textbf{Explicit Free List}: Maintain list of only \textit{free} blocks
+	\begin{itemize}
+		\item Structure: Header + \underline{Pointers to prev/next free block} + (Empty Space) + Footer
+		\item (First fit) Allocation time is linear in the number of \textit{free} blocks.
+		\item Insertion Policy: Where to put the newly freed block?
+		\begin{itemize}
+			\item LIFO: Insert at the beginning
+			\begin{itemize}
+				\item Simple and constant time freeing
+				\item Fragmentation may be worse
+			\end{itemize}
+			\item Address Ordered: Free list blocks are always in address order
+			\begin{itemize}
+				\item Fragmentation may be lower than LIFO
+				\item But requires search...
+			\end{itemize}
+		\end{itemize}
+	\end{itemize}
+	\item Explicit Free List: \textbf{Comparison to Implicit Free List}
+	\begin{itemize}
+		\item Allocation is linear in the number of \textbf{free} blocks, not \textbf{all} blocks
+		\item More complicated to free block and insert (doubly linked list)
+		\item Extra space needed for the prev/next pointer, increases internal fragmentation
+	\end{itemize}
+	\item \textbf{Segregated Free List}: Different free lists for different size classes
+	\begin{itemize}
+		\item Different free lists for different size or range of sizes
+		\item Allocation Process (Segregated Fits)
+		\begin{itemize}
+			\item Search for free block in the appropriate free list
+			\item If block found, split and place fragment on appropriate list (optional)
+			\item If not found, keep searching next larger class of free list
+			\item Still not found: request additional heap memory (call \texttt{sbrk}), allocate into the new memory and insert remaining block into appropriate size class
+			\item Freeing: Free and coalesce, insert into appropriate size class
+		\end{itemize}
+		\item \textbf{Advantages}
+		\begin{itemize}
+			\item Higher throughput ($\log$ time for $2^k$ size classes)
+			\item Better memory utilization
+			\begin{itemize}
+				\item First-fit search $\approx$ best-fit search of entire heap
+				\item Extreme case: Giving each block its own size class is equivalent to best-fit
+			\end{itemize}
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Garbage Collection}: Automatic reclamation of heap storage
+	\begin{itemize}
+		\item Garbage: allocated blocks not needed by the program
+		\item Certain blocks cannot be used if there are no pointers to them
+		\item Memory as a \textbf{graph}
+		\begin{itemize}
+			\item Node: Each block
+			\item Edge: Each pointer
+			\item Root Node: Locations not in the heap the contain pointers to heap (ex. registers, locations on stack, global variables)
+			\item A node is \textbf{reachable} is there exists a path from any root to that node
+			\item Non-reachable node is garbage
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Mark \& Sweep} Garbage Collection
+	\begin{itemize}
+		\item Mark: Start at roots and set mark bit on each reachable block
+		\item Sweep: Scan all blocks and free blocks that are not marked
+	\end{itemize}
+	\item Conservative\footnote{C language does not tag memory locations with type information...} Mark \& Sweep in C
+	\begin{itemize}
+		\item Pointers in C can point to the middle of the block
+		\item Use a balanced binary tree to keep track of all allocated blocks, with start of block address as key
+		\item Balanced-tree pointers can be stored in header (two additional words) 
+	\end{itemize}
+	\item Memory Bugs
+	\begin{itemize}
+		\item Dereferencing illegal pointers
+		\item Reading uninitialized memory
+		\item Overwriting memory (Stack/Buffer overflows)
+		\item Referencing nonexistent variables
+		\item Double free
+		\item Referencing freed blocks
+		\item Not freeing blocks (memory leaks)
+	\end{itemize}
+\end{itemize}
+
+\pagebreak
+
+\cname{Network Programming}
+\begin{itemize}
+	\item Client Server Model
+	\begin{itemize}
+		\item A \textbf{server} process and one or more \textbf{client} processes
+		\item Server manages some \textbf{resource}, provides \textbf{service} for clients
+		\item Client requests activate server
+		\begin{enumerate}
+			\item Client sends request
+			\item Server handles request
+			\item Server sends response
+			\item Client handles response
+		\end{enumerate}
+	\end{itemize}
+	\item Computer Networks
+	\begin{itemize}
+		\item \textbf{Network} is a hierarchical system organized by geographical proximity
+		\begin{itemize}
+			\item LAN(local area network): spans building/campus
+			\item Ethernet: Most popular LAN technology
+		\end{itemize}
+		\item \textbf{Ethernet Segment} consists of a collection of hosts connected by wires to a hub
+		\begin{itemize}
+			\item Spans small areas: room, floor in a building
+			\item One end attached on a host, other end attached to a \textbf{port} on the hub
+			\item Each Ethernet adapter has 48-bit address (MAC address)
+			\item Host sends \textbf{frames}(chunk of bits) to any other host on the segment
+			\item Each frame includes some fixed number of \textbf{header} bits (identify source and destination), frame length, payload(data)
+		\end{itemize}
+		\item \textbf{Bridged Ethernets}: Multiple Ethernet segments connected into larger LANs
+		\begin{itemize}
+			\item Bridges: set of wires and small boxes (...)
+			\item Spans entire buildings or campuses
+			\item Make better use of the available wire bandwidth than hubs
+			\item Clever distributed algorithm: Learn which hosts are reachable from which ports and then selectively copy frames from one port to another only when it is necessary
+		\end{itemize}
+		\item Multiple \underline{incompatible} LANs can be connected by specialized computers called \textbf{routers} to form an \textbf{internet}
+		\begin{itemize}
+			\item Each router has an adapter (port) for each network that is connected to
+			\item WAN(wide area network): Routers can also connect high-seed point-to-point phone connections
+		\end{itemize}
+		\item \textbf{Protocol Software} running on each host and router
+		\begin{itemize}
+			\item Possible to send bits across incompatible LANs and WANs
+			\item Smooths out the differences between the different networks
+			\item Implements a \textbf{protocol} that governs how host and routers cooperate to transfer data
+			\item Provides \textbf{naming scheme}
+			\begin{itemize}
+				\item Defines a uniform format for host addresses
+				\item Each host/router is assigned at least one internet addresses that uniquely identifies it
+			\end{itemize}
+			\item Provides \textbf{delivery mechanism}
+			\begin{itemize}
+				\item Defines a uniform way to bundle up data bits into \textbf{packets}
+				\item Packet consists of header (packet size, address of src/dest) and payload (data bits from src)
+			\end{itemize}
+		\end{itemize}
+	\end{itemize}
+	\item Transferring internet Data (Encapsulation)
+	\begin{enumerate}
+		\item Client on host A copies data from the client's VA space into kernel buffer (system call)
+		\item Protocol SW on A creates \textit{LAN1 frame} by appending an internet header and a LAN1 frame header to the data (\textbf{Encapsulation})
+		\item LAN1 adapter copies the frame to the network
+		\item Router's LAN1 adapter reads the frame from the wire and passes it to the protocol SW
+		\item Router fetches the destination address from the \textit{internet packet header} and uses it as an \textit{index into a routing table} to determine where to forward the packet. Remove LAN1 frame header and append LAN2 frame header, pass the result to adapter
+		\item LAN2 adapter copies the frame to the network
+		\item Host B's adapter reads the frame from the wire and passes it to the protocol SW
+		\item Protocol SW on B strips of packet header and frame header. Eventually copies the resulting data into the server's VA space when a read system call is invoked
+	\end{enumerate}
+	\item \textbf{Global IP Internet}
+	\begin{itemize}
+		\item Most famous example of an internet
+		\item \textbf{TCP/IP Protocol} family
+		\begin{itemize}
+			\item IP (Internet Protocol): Provides basic naming scheme and unreliable delivery capability of packets from host to host
+			\item UDP (Unreliable Datagram Protocol): Uses IP to provide unreliable datagram delivery from process to process
+			\item TCP (Transmission Control Protocol): Uses IP to provide \textbf{reliable} byte streams from process to process \underline{over connections}
+		\end{itemize}
+		\item Accessed via a mix of Unix file I/O and functions from the \textbf{sockets interface}
+	\end{itemize}
+	\item Programmer's View of the Internet
+	\begin{itemize}
+		\item Hosts are mapped to a set of 32-bit \textbf{IP addresses}
+		\item Each IP address is mapped to an identifier called Internet \textbf{domain names}
+		\item A process on one Internet host can communicate with a process on another Internet host over a \textbf{connection}
+	\end{itemize}
+	\item \textbf{IP Addresses}
+	\begin{itemize}
+		\item 32-bit address (IPv4) stored in an IP address struct \texttt{in\_addr}
+		\item Stored in \textit{network byte order} (big-endian byte order)
+		\item Unix provides functions that convert between host byte order and network byte order (\texttt{htonl}, \texttt{htons}, \texttt{ntohl}, \texttt{ntohs})
+		\item Humans use \textbf{dotted decimal notation}
+		\item Application programs convert between IP addresses and dotted decimal strings using \texttt{inet\_pton}/\texttt{inet\_ntop}\footnote{\texttt{p} for presentation, \texttt{n} for network}
+	\end{itemize}
+	\item \textbf{Internet Domain Names}
+	\begin{itemize}
+		\item Numbers are hard to remember - defines \textbf{domain names}, and a mechanism that maps domain names to IP addresses
+		\item Domain names form a hierarchy, represented as a tree, subtrees referred to as subdomains
+		\item The mapping is maintained in a huge worldwide distributed database called \textbf{DNS} (domain name system), consisting of host entries.
+	\end{itemize}
+	\item \textbf{Internet Connections}
+	\begin{itemize}
+		\item Clients and servers communicate by sending streams of bytes over \textbf{connections}
+		\begin{itemize}
+			\item Point-to-Point: Connects a pair of processes
+			\item Full-Duplex: Data flows in both directions at the same time
+			\item Reliable: Stream of bytes are received in the same order it was sent
+		\end{itemize}
+		\item A \textbf{socket} is an endpoint of a connection
+		\item Socket address: \texttt{IPaddress:port} pair
+		\item \textbf{Port} is a 16-bit int that identifies a process
+		\begin{itemize}
+			\item Ephemeral Port: Assigned automatically by client kernel when client makes a connection request
+			\item Well-known Port: Associated with some \textit{service} provided by a server (ex. 80-http, 22-ssh ...)
+		\end{itemize}
+		\item A connection is uniquely identified by the socket address of its endpoints (\textbf{socket pair}) \texttt{(clientaddr:clientport, serveraddr:serverport)}
+	\end{itemize}
+	\item \textbf{Sockets Interface}
+	\begin{itemize}
+		\item Set of system level functions used in conjunction with Unix I/O to build network applications
+		\item \textbf{Socket} is an endpoint of communication to the kernel, a \textit{file descriptor} to an application, that enables read/write from/to the network
+		\item Clients and servers communicate with each other by reading and writing to socket descriptors
+		\item Difference between regular file I/O: How the application ``opens'' the socket descriptors
+		\item \textbf{Socket Address Struct} 
+		\begin{itemize}
+			\item \texttt{sockaddr}, \texttt{SA}: Generic socket address for arguments to \texttt{connect}, \texttt{bind}, \texttt{accept}
+			\item \texttt{sockaddr\_in}: Internet specific socket address (IPv4)
+		\end{itemize}
+		\item \textbf{\texttt{socket} function} (= application buffer allocation)
+		\begin{itemize}
+			\item \texttt{int socket(int domain, int type, int protocol);}
+			\item Clients and servers use \texttt{socket} to create \textit{socket descriptor}
+			\item Returns non-negative descriptor, only partially opened and cannot yet be used for reading and writing
+			\item This function is \textit{protocol specific}. Use \texttt{getaddrinfo}
+		\end{itemize}
+		\item \textbf{\texttt{connect} function} (= set a connection to a server)
+		\begin{itemize}
+			\item \texttt{int connect(int clinetfd, const SA *addr, socklen\_t addrlen);}
+			\item Client establishes a connection by calling \texttt{connect}
+			\item Attempt to establish a connection with server at socket address \texttt{addr}
+			\item \texttt{addrlen} is \texttt{sizeof(sockaddr\_in)}
+			\item If successful, \texttt{clientfd} is ready for read/write
+			\item Resulting connection is characterized by the socket pair\\
+			\texttt{(x:y, addr.sin\_addr:addr.sin\_port)} (\texttt{x}: Client's IP, \texttt{y}: ephemeral port that uniquely identifies the client process on the client host)
+			\item Using \texttt{getaddrinfo} is the best practice
+		\end{itemize}
+		\item \textbf{\texttt{bind} function} (= bind socket to service)
+		\begin{itemize}
+			\item \texttt{int bind(int sockfd, SA *addr, socklen\_t addrlen);}
+			\item Asks the kernel to associate the server's socket address with a socket descriptor
+			\item Process can read bytes that arrive on the connection whose endpoint is \texttt{addr} by reading from descriptor \texttt{sockfd}
+			\item Writes to \texttt{sockfd} are transferred along connection whose endpoint is \texttt{addr}
+		\end{itemize}
+		\item \textbf{\texttt{listen} function} (= tells the kernel that this will be a server socket)
+		\begin{itemize}
+			\item \texttt{int listen(int sockfd, int backlog);}
+			\item Tells the kernel that the descriptor will be used by a server instead of a client
+			\item Converts \texttt{sockfd} from an active socket to a \textit{listening socket} that can accept connection request from clients
+			\item \texttt{backlog} is a hint about the number of outstanding connection requests that the kernel should queue up before it starts to refuse requests
+		\end{itemize}
+		\item \textbf{\texttt{accept} function} (= receive connection request)
+		\begin{itemize}
+			\item \texttt{int accept(int listenfd, SA *addr, int *addrlen);}
+			\item Server waits for connection requests from clients by calling \texttt{accept}
+			\item Waits for connection request to arrive on the connection bound to \texttt{listenfd}, then fills in client's socket address in \texttt{addr} and size of the socket address in \texttt{addrlen}
+			\item Returns a \textit{connected descriptor} that can be used to communicate with the client via Unix I/O routines
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Connected vs. Listening Descriptors}
+	\begin{itemize}
+		\item Listening Descriptor
+		\begin{itemize}
+			\item Endpoint for client connection \textbf{requests}
+			\item Created once and exists for lifetime of the server
+		\end{itemize}
+		\item Connected Descriptor
+		\begin{itemize}
+			\item Endpoint of connection between client and server
+			\item \textbf{New descriptor created each time} the server accepts a connection request
+			\item Exists only as long as it takes to service client
+		\end{itemize}
+		\item Distinction needed: Allows for concurrent servers that can communicate over many client connections simultaneously
+	\end{itemize}
+	\item \textbf{Host and Service Conversion}
+	\begin{itemize}
+		\item \texttt{getaddrinfo} \textbf{function}
+		\begin{itemize}
+			\item Modern way to convert string representations of hostnames, host addresses, ports and service names to SA
+			\item Re-entrant, portable protocol-independent  (IPv4/v6 both OK)
+			\item \texttt{int getaddrinfo(const char *host, char *service,\\
+				const struct addrinfo *hints, struct addrinfo **result);}
+			\item Given host and service, returns \texttt{result} that points to a linked list of \texttt{addrinfo} structs, each of which points to a corresponding socket address struct, and which \underline{contains arguments for the sockets interface functions}.
+			\item Client walks the list trying each socket address in turn, until the calls to \texttt{socket} and \texttt{connect} succeed
+			\item Server walks the list until calls to \texttt{socket} and \texttt{bind} succeed.
+		\end{itemize}
+		\item \texttt{addrinfo} struct
+		\begin{itemize}
+			\item Contains arguments that can be passed directly to \texttt{socket} function
+			\item Points to a socket address struct that can be passed directly to \texttt{connect}, \texttt{bind}
+		\end{itemize}
+		\item \texttt{getnameinfo} \textbf{function}
+		\begin{itemize}
+			\item \texttt{int getnameinfo(const SA *sa, socklen\_t salen, char *host,\\
+				size\_t hostlen, char *serv, size\_t servlen, int flags);}
+			\item Inverse of \texttt{getaddrinfo}, converts socket address to the corresponding host and service
+			\item Also re-entrant and protocol-independent
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Sockets Helper}
+	\begin{itemize}
+		\item \texttt{open\_clientfd}
+		\begin{itemize}
+			\item \texttt{int open\_clientfd(char *hostname, char *port);}
+			\item Establish a connection with a server
+		\end{itemize}
+		\item \texttt{open\_listenfd}
+		\begin{itemize}
+			\item \texttt{int open\_listenfd(char *port);}
+			\item Server creates listening descriptor that is ready to receive connection requests
+		\end{itemize}
+	\end{itemize}
+	\item \texttt{accept} Illustrated
+	\begin{enumerate}
+		\item Server blocks in \texttt{accept}, waiting for connection request on \texttt{listenfd}
+		\item Client makes connection request by calling and blocking in \texttt{connect}
+		\item Server returns \texttt{connfd} from \texttt{accept}, client returns from \texttt{connect}
+		\item Connection between \texttt{clientfd} and \texttt{connfd} established
+	\end{enumerate}
+	\item \textbf{Web Servers}
+	\begin{itemize}
+		\item Clients and servers communicate using \texttt{HTTP}
+		\item Web servers return \textit{content} to clients (MIME)
+		\item Static Content: Contents stored in files and retrieved in response to an HTTP request
+		\item Dynamic Content: Content produced on-the-fly in response to an HTTP request
+		\item Web content is associated with some file managed by the Web server
+		\item \textbf{URL}(universal resource locator): unique name for each file
+		\item Clients use \textit{prefix} to infer protocol, server, port
+		\item Servers use \textit{suffix} to find file on the system or determine if request is for static/dynamic content
+	\end{itemize}
+	\item \textbf{HTTP Request}
+	\begin{itemize}
+		\item A \textit{request line}, followed by zero or more \textit{request headers}
+		\item \texttt{<method> <uri> <version>}
+		\item \texttt{method}: \texttt{GET}, \texttt{POST} ...
+		\item \texttt{uri}: URL for proxies, URL suffix for servers (uniform resource identifier)
+		\item \texttt{version}: HTTP version of request
+		\item Headers: \texttt{<header name> : <header data>}
+	\end{itemize}	
+	\item \textbf{HTTP Responses}
+	\begin{itemize}
+		\item A \textit{response line} followed by zero or more \textit{response headers}, possibly followed by \textit{content}, with blank line \texttt{$\backslash$r$\backslash$n} separating headers from content
+		\item \texttt{<version> <status code> <status msg>}
+		\item \texttt{status code}: numeric status
+		\item \texttt{status msg}: corresponding English text
+		\item Headers: \texttt{<header name> : <header data>}
+	\end{itemize}
+	\item \textbf{Serving Dynamic Content}
+	\begin{enumerate}
+		\item Client sends request to server
+		\item URI contains \texttt{/cgi-bin}, server assumes dynamic content
+		\item Server creates child process and runs the program identified by the URI
+		\item The child runs and generates dynamic content
+		\item Server forwards the content to the client
+	\end{enumerate}
+	\begin{itemize}
+		\item Request arguments appended to the URI. List starts with \texttt{?}, separated by \texttt{\&}
+		\item Arguments are passed to the child in \texttt{QUERY\_STRING}
+		\item Server uses \texttt{dup2} to redirect child's \texttt{stdout} to its connected socket
+	\end{itemize}
+	\item \textbf{CGI}(Common Gateway Interface)
+	\begin{itemize}
+		\item Original standard for generating dynamic content (now replaced)
+		\item Defines a simple standard for transferring information between the client, server, the child process
+	\end{itemize}
+\end{itemize}
+
+\pagebreak
+
+\cname{Concurrent Programming}
+\begin{itemize}
+	\item Hard!
+	\begin{itemize}
+		\item Human mind is sequential, misleading notion of time
+		\item Considering all possibilities of \textbf{interleaving} is impossible
+		\item \textbf{Races}: Outcome depends on arbitrary scheduling decisions
+		\item \textbf{Deadlock}: Improper resource allocation preventing progress, stuck waiting for an event that will never happen
+		\item Livelock, starvation, fairness etc.
+	\end{itemize}
+	\item \textbf{Concurrent Servers}
+	\begin{itemize}
+		\item \textbf{Process}-based: Automatic interleaving by kernel, private address space for each flow
+		\item \textbf{Event}-based: Manual interleaving, shared address space, \textit{I/O multiplexing}
+		\item \textbf{Thread}-based: Automatic interleaving by kernel, shared address space (Mixup)
+	\end{itemize}
+	\item \textbf{Process Based Server}
+	\begin{itemize}
+		\item Separate process for each client (\texttt{fork})
+		\item Must reap all zombie children
+		\item \texttt{accept} process
+		\begin{enumerate}
+			\item Server blocks in \texttt{accept}, waits for connection request on \texttt{listenfd}
+			\item Client makes connection request by \texttt{connect}
+			\item Server returns \texttt{connfd} from \texttt{accept}, \textit{Forks child to handle client}
+			\item Connection between \texttt{clientfd} and \texttt{connfd} is established  
+		\end{enumerate}
+		\item \textit{No shared states between clients}
+		\item Both parent \& child have copies of \texttt{listenfd} and \texttt{connfd}: parent should close \texttt{connfd}, child should close \texttt{listenfd} (considering \texttt{refcnt})
+		\item Pros
+		\begin{itemize}
+			\item Clean sharing model - file tables (o), descriptors/global var.(x)
+			\item Simple and straightforward
+		\end{itemize}
+		\item Cons
+		\begin{itemize}
+			\item Additional overhead for process control
+			\item Hard to share data between processes (IPC)
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Event Based Server}
+	\begin{itemize}
+		\item Maintains a set of active connections by an array of \texttt{connfd}s
+		\item Repeats:
+		\begin{itemize}
+			\item \texttt{select} which descriptors have pending inputs
+			\item If \texttt{listenfd} has input, \texttt{accept} the connection
+			\item Add new \texttt{connfd} to array
+			\item Service all \texttt{connfd}s with pending inputs
+		\end{itemize}
+		\item Pros
+		\begin{itemize}
+			\item One logical control flow and shared address space
+			\item Can single step with debugger
+			\item No process or thread control overhead
+			\item Gives programmers more control over the behavior
+		\end{itemize}
+		\item Cons
+		\begin{itemize}
+			\item Too complex
+			\item Hard to provide fine-grained concurrency
+			\item Cannot take advantage of multi-core (single control)
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Thread}: Logical flow that runs in the context of a process
+	\begin{itemize}
+		\item \textbf{Thread context}: Registers, Condition Codes, Stack Pointer, Program Counter, Thread ID, own stack (for local var)
+		\item Threads share same code, data, and kernel context (VA space)
+		\item Threads $\approx$ pools of concurrent flow that access the same data\footnote{Processes form a tree hierarchy, where threads do not}
+		\item Concurrent if flows overlap in time
+	\end{itemize}
+	\item \textbf{Threads vs. Processes}
+	\begin{itemize}
+		\item Similarities
+		\begin{itemize}
+			\item Own logical control flow
+			\item Can run concurrently with others
+			\item Context switching
+		\end{itemize}
+		\item \textbf{Differences}
+		\begin{itemize}
+			\item Threads share all code and data (except local stacks)
+			\item Threads are less expensive than processes (they have less context)
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Posix Threads} (\texttt{pthreads}) \textbf{Interface}
+	\begin{itemize}
+		\item Standard interface that manipulate threads from C programs
+		\item Creating Threads
+		\begin{itemize}
+			\item \texttt{int pthread\_create(pthread\_t *tid, NULL, func *f, void *arg);}
+			\item \texttt{tid}: contains id of created thread
+			\item \texttt{f}: thread routine
+			\item \texttt{arg}: arguments for \texttt{f}
+		\end{itemize}
+		\item Terminating Threads
+		\begin{itemize}
+			\item \texttt{void pthread\_exit(void *thread\_return);}
+			\item \texttt{int pthread\_cancel(pthread\_t tid);}
+			\item Terminates the thread with \texttt{tid}
+		\end{itemize}
+		\item Reaping Threads
+		\begin{itemize}
+			\item \texttt{int pthread\_join(pthread\_t tid, void **thread\_return);}
+			\item Blocks until thread \texttt{tid} terminates, and reaps terminated thread
+			\item Can only wait for a specific thread
+		\end{itemize}
+		\item Detaching Threads
+		\begin{itemize}
+			\item Joinable thread: Can be reaped and killed by other threads, memory is not freed until reaped.
+			\item Detached thread: Cannot be reaped by other threads, memory is freed automatically on termination
+			\item \texttt{int pthread\_detach(pthread\_t tid);}
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Thread Based Server}
+	\begin{itemize}
+		\item Run only detached threads: reaped automatically
+		\item Free \texttt{vargp}, \texttt{close(connfd)} necessary
+		\item Each client handled by each peer thread
+		\item Careful to avoid unintended sharing (\texttt{malloc})
+		\item Functions in the thread routine must be thread-safe
+		\item Pros
+		\begin{itemize}
+			\item Easy to share data between threads (perhaps too easy)
+			\item Efficient than processes (cheaper context switch)
+		\end{itemize}
+		\item Cons
+		\begin{itemize}
+			\item Unintended sharing
+			\item Difficult to debug
+		\end{itemize}
+	\end{itemize}
+\end{itemize}
+\pagebreak
+
+\cname{Synchronization}
+\begin{itemize}
+	\item \textbf{Threads Memory Model}
+	\begin{itemize}
+		\item Variable shared $\iff$ Multiple threads reference the variable
+		\item Multiple threads run within the context of a single process
+		\item Threads have its own thread context (TID, SP, PC, CC, REG)
+		\item Share the remaining process context
+	\end{itemize}
+	\item \textbf{Variable Instances in Memory}
+	\begin{itemize}
+		\item Global Variables: Exactly one instance
+		\item Local Variables: Each thread stack has one instance each
+		\item Local \textit{Static} Variables: Exactly one instance\footnote{It's similar to global variables, just that its scope is limited to the function}
+	\end{itemize}
+	\item \textbf{Concurrent Execution \& Process Graphs}
+	\begin{itemize}
+		\item Interleaving of any order possible; May cause errors
+		\item \textbf{Process Graph} depicts the discrete \textit{execution state space} of concurrent threads
+		\item Axis: sequential order of instructions in a thread
+		\item Each point: Possible \textit{execution state}
+		\item Trajectory: is a sequence of legal state \textit{transitions} of possible concurrent execution (one set of interleaving)
+		\item \textbf{Critical Section} (w.r.t a shared var): load $\sim$ store instruction
+		\item Instructions in critical section should not be interleaved
+		\item \textbf{Unsafe Region}: Intersection of critical sections
+		\item Trajectory is \textit{safe} $\iff$ does not pass unsafe region
+		\item Enforce \textbf{mutual exclusion} to \textbf{synchronize} the execution of threads so that they can never have an unsafe trajectory
+	\end{itemize}
+	\item \textbf{Semaphores}: Non-negative global integer synchronization variable
+	\begin{itemize}
+		\item Mainpulated by \texttt{P}, \texttt{V} operations
+		\item \texttt{P(s)} (= Lock)
+		\begin{itemize}
+			\item If $s\neq 0$, \texttt{s--} and return (happens atomically)
+			\item If $s=0$, \textbf{suspend} until $s\neq 0$, and the thread is restarted by a \texttt{V} operation
+			\item After restart, \texttt{P} decrements \texttt{s} and returns control to caller
+		\end{itemize}
+		\item \texttt{V(s)} (= Unlock)
+		\begin{itemize}
+			\item \texttt{s++} and return
+			\item If any threads blocked in \texttt{P} are waiting, restart exactly one of those threads,\footnote{You don't know which will be restarted...} which enables \texttt{P} to decrement \texttt{s}.
+		\end{itemize}
+		\item \textbf{Semaphore Invariant}: $s\geq 0$
+	\end{itemize}
+	\item \textbf{Semaphores for Synchronization}
+	\begin{itemize}
+		\item Associate a unique semaphore \textbf{mutex} (initially 1) with each shared var
+		\item Surround corresponding critical sections with \texttt{P}, \texttt{V} operations
+		\item \textit{Binary Semaphores}: Value is 0 or 1
+		\item \textit{Mutex}: Binary semaphores for \textbf{mut}ual \textbf{ex}clusion
+		\item \textit{Counting Semaphore}: Counter for set of available resources
+		\item Synchronization makes programs run slower
+		\item The semaphore invariant surrounds critical sections, which is the \textit{forbidden region}
+		\item Semaphore is $<0$ in the forbidden region, therefore cannot be passed by any trajectory
+	\end{itemize}
+	\item \textbf{Semaphores to Coordinate Access to Shared Resources}
+	\begin{itemize}
+		\item Semaphore operation to notify another thread that some condition has become true
+		\item Use counting semaphores to keep track of resource state
+		\item Mutex for protecting access to the resource
+	\end{itemize}
+	\item \textbf{Producer-Consumer Problem}
+	\begin{itemize}
+		\item They share a bounded buffer with $n$ slots
+		\item Producer produces new items, inserts them to the buffer, notify consumer
+		\item Consumer consumes items, removes them from the buffer, notify producer
+		\item \texttt{sbuf} (shared buffer) package
+		\item \texttt{slots}: counts available slots in the buffer
+		\item \textit{items}: counts available items in the buffer
+	\end{itemize}
+	\item \textbf{Reader-Writers Problem}
+	\begin{itemize}
+		\item Reader threads only read object
+		\item Writer threads modify the object $\rightarrow$ Must have exclusive access
+		\item Unlimited readers can access the object
+		\item \textit{First readers-writers problem} (Reader Favoring)
+		\begin{itemize}
+			\item No reader should be kept waiting if writer doesn't have access
+			\item Reader has priority over writers
+			\item Starvation for writers may happen
+		\end{itemize} 
+		\item \textit{Second readers-writers problem} (Writer Favoring)
+		\begin{itemize}
+			\item Once a writer is ready to write, performs write ASAP
+			\item Readers that arrive after a writer must wait, even if the writer is also waiting
+			\item Starvation for readers may happen
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Prethreaded Concurrent Server}
+	\begin{itemize}
+		\item Creating/reaping thread is expensive! Maintain a set of worker threads!
+		\item Server consists of main thread and a set of worker threads
+		\item Main thread repeatedly accepts connection from clients and places \texttt{connfd} in a bounded buffer
+		\item Each worker thread removes \texttt{connfd} from the buffer, services client and waits for the next descriptor
+	\end{itemize}
+	\item \textbf{Thread Safety}
+	\begin{itemize}
+		\item Functions called in a thread routine must be \textbf{thread safe}
+		\item Thread Safe $\iff$ Always produces correct results when called repeatedly from multiple concurrent threads
+		\item Classes of unsafe functions
+		\begin{enumerate}
+			\item Functions that do not protect \textit{shared variables}
+			\begin{itemize}
+				\item Use \texttt{P}, \texttt{V} operations to synchronize
+			\end{itemize}
+			\item Functions that keep \textit{states across multiple invocations}
+			\begin{itemize}
+				\item Modify function to be \textit{re-entrant}
+			\end{itemize}
+			\item Functions that return a \textit{pointer to a static variable}
+			\begin{itemize}
+				\item Rewrite function so caller passes address of variable to store result
+				\item Lock and copy: Lock and copy to a another private memory location to store the result (write a wrapper function)
+			\end{itemize}
+			\item Functions that call other unsafe functions
+			\begin{itemize}
+				\item Just don't call them
+			\end{itemize}
+		\end{enumerate}
+	\end{itemize}	
+	\item \textbf{Reentrancy}
+	\begin{itemize}
+		\item Function is \textbf{reentrant} $\iff$ Does not access shared variables when called by multiple threads
+		\item Requires no synchronization process (which is expensive)
+	\end{itemize}
+	\item \textbf{Race Conditions}
+	\begin{itemize}
+		\item Race when the correctness of program depends on on thread reaching point $ x $ before another thread reaches $ y $
+		\item Happens usually when programmer assumes some particular trajectory
+		\item Avoid unintended sharing to prevent races
+	\end{itemize}
+	\item \textbf{Deadlocks}
+	\begin{itemize}
+		\item Deadlock $\iff$ Waiting for a condition that will never be true
+		\item \texttt{P} operation is a potential problem because it blocks
+		\item Trajectory entering deadlock region will reach deadlock state
+		\item Often non-deterministic
+		\item Fix: Acquire shared resources in the same order
+	\end{itemize}
+\end{itemize}
+
+\pagebreak
+\cname{Midterm 2 Problems}
+\begin{enumerate}
+	\item Internal/External Fragmentation difference\\
+	Internal fragmentation occurs when payload is smaller than the block size, also because of padding and alignment requirements and placement policy decisions. It depends on the previous requests of allocation.\\
+	External fragmentation occurs when there is enough free space, but they are divided into small chunks of free space, unable to handle the request. This depends on future requests.
+	\item Inverted Page Table Pros and Cons
+	\item 5 methods of I/O
+	\begin{itemize}
+		\item 
+		\item 
+		\item 
+		\item 
+		\item 
+	\end{itemize}
+	\item NAT/PAT difference
+	\begin{itemize}
+		\item NAT: Concurrent connection per IP
+		\item NAT: Shares IP
+		\item PAT: Concurrent connection per each port of each IP
+		\item PAT: Shares IP and port
+	\end{itemize}
+	\item How to distinguish each connection on the internet?\\
+	A connection is uniquely identified by the socket address of its endpoints (socket
+	pair) \texttt{(clientaddr:clientport, serveraddr:serverport)}
+	\item 3 methods of concurrent servers and pros and cons
+	\begin{itemize}
+		\item Process Based: One process for each client
+		\begin{itemize}
+			\item Simple and straightforward, switching done automatically by kernel
+			\item Private address space for each client
+			\item Hard to share data between processes
+			\item Additional overhead for process control
+		\end{itemize}
+		\item Event Based: Maintains a set of active connections by an array of \texttt{connfd}s
+		\begin{itemize}
+			\item One logical control flow and shared address space
+			\item Can single step with debugger
+			\item No process or thread control overhead
+			\item More control over the behavior
+			\item Too complex
+			\item Hard to provide fine-grained concurrency
+			\item Cannot take advantage of multi-core
+		\end{itemize}
+		\item Thread Based: Separate thread for each client
+		\begin{itemize}
+			\item Easy to share data between threads
+			\item Efficient than processes, cheaper context switch
+			\item May cause unintended sharing
+			\item Difficult to debug, errors hard to reproduce
+		\end{itemize}
+	\end{itemize}
+	\item Any methods other than the 3 above?
+	\begin{itemize}
+		\item \textbf{Prethreading}!
+		\item Creating/reaping thread is expensive! Maintain a set of worker threads!
+		\item Server consists of main thread and a set of worker threads
+		\item Main thread repeatedly accepts connection from clients and places \texttt{connfd} in a bounded buffer
+		\item Each worker thread removes \texttt{connfd} from the buffer, services client and waits for
+		the next descriptor
+	\end{itemize}
+	\item What is deadlock and why does it happen?
+	\begin{itemize}
+		\item Deadlock is a state where program is waiting for a condition that will never true
+		\item \texttt{P} operation is the potential cause because it blocks the program. It is caused when program trajectory enters the deadlock region. Occurs when shared resource is acquired in different order
+	\end{itemize}
+	\item Class A, Class B IP address difference
+	\begin{itemize}
+		\item Different prefixes, Network ID and host address
+		\item A starts with 0 and 1st octet is Net ID
+		\item B starts with 10 and octet 1-2 is Net ID
+		\item C starts with 110 and octet 1-3 is Net ID
+		\item Rest is Host ID
+	\end{itemize}
+	\item Number of Class B, and number of hosts for each\\
+	2 octets used for determining network ID and 2 bits are reserved as 10, thus $2^{14} = 16,384$ network IDs. Host also uses 2 octets, $2^{16}=65,536$ addresses. But the first address is network number, and the last address is reserved for broadcast IP, thus $65,534$ hosts per network.
+	\item Boundary Tag, when is it used?
+	\begin{itemize}
+		\item Boundary Tag is a footer for a memory block that contains the size of the current block and the allocation status for the block.
+		\item It is used for coalescing previous blocks, and enables constant time coalescing possible. The previous block can be referenced by using the size information in the footer(boundary tag) of the previous block
+	\end{itemize}
+\end{enumerate}
+}\end{document}

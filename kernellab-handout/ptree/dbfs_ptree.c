@@ -12,7 +12,7 @@ static struct task_struct *curr;
 static struct debugfs_blob_wrapper blob;
 
 void print_pid(struct task_struct* task) {
-	if(task ->  pid > 1) print_pid(task -> real_parent); // if not init, recursive call
+	if(task -> pid > 1) print_pid(task -> real_parent); // if not init, recursive call
 	size = snprintf(blob.data + blob.size, BUF - blob.size, "%s (%d)\n", task -> comm, task -> pid); // print to buffer
 	blob.size += size;
 }
@@ -57,6 +57,7 @@ static int __init dbfs_module_init(void) { // will be executed on initialization
 static void __exit dbfs_module_exit(void) { // executed on exit
 	// Implement exit module code
 	// printk("dbfs_ptree module exit\n");
+	debugfs_remove_recursive(dir);
 }
 
 module_init(dbfs_module_init);
