@@ -13,14 +13,18 @@ void parse_uri(char *uri, char *hostname, char *path, int *port);
 void build_http_header(char *http_header, char *hostname, char *path, int port, rio_t *client_rio);
 int connect_server(char *hostname, int port, char *http_header);
 
-int main(int argc,char **argv) {
+void *thread(void *vargp);
+
+int main(int argc, char **argv) {
     int listenfd, connfd;
     socklen_t clientlen;
     char hostname[MAXLINE], port[MAXLINE];
     struct sockaddr_storage clientaddr;
 
+    pthread_t tid; // thread id for concurrency
+
     if(argc != 2){
-        fprintf(stderr,"usage :%s <port> \n", argv[0]);
+        fprintf(stderr, "usage :%s <port> \n", argv[0]);
         exit(1);
     }
 
@@ -37,11 +41,20 @@ int main(int argc,char **argv) {
         // print connection message
         printf("Accepted connection from (%s %s).\n", hostname, port);
 
-        doit(connfd); // handle clients sequentially
-
-        Close(connfd); // do not forget to close
+        // create thread
+        Pthread_create(&tid, NULL, thread, (void *) (long long) connfd);
     }
     return 0;
+}
+
+// Thread routine
+void *thread(void *vargp) {
+    int connfd = (int) (long long) vargp;
+    Pthread_detach(pthread_self()); // detach to avoid memory leak
+
+    doit(connfd); // handle clients
+
+    Close(connfd); // do not forget to close
 }
 
 // Services the client
@@ -98,12 +111,12 @@ void build_http_header(char *http_header, char *hostname, char *path, int port, 
     char buf[MAXLINE], request_hdr[MAXLINE], other_hdr[MAXLINE], host_hdr[MAXLINE];
 
     // Print request line to request header
-    sprintf(request_hdr,"GET %s HTTP/1.0\r\n", path);
+    sprintf(request_hdr, "GET %s HTTP/1.0\r\n", path);
 
     // Get other request headers
     int n;
     while((n = Rio_readlineb(client_rio, buf, MAXLINE)) > 0) {
-        if(!strncmp(buf,"\r\n", 2)) break; // End of file
+        if(!strncmp(buf, "\r\n", 2)) break; // End of file
 
         // Host
         if(!strncasecmp(buf, "Host", 4)) {
