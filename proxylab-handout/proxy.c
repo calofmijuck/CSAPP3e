@@ -5,7 +5,9 @@
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
 
+#define LRU_MAX 8192
 #define CACHE_ITEMS 10
+#define BUF_SIZE (1 << 14)
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
@@ -44,7 +46,7 @@ typedef struct {
 
 typedef struct {
     cache_item item[CACHE_ITEMS];  // 10 blocks
-    int num;
+    int num; // ?
 } Cache;
 
 Cache cache; // Global cache
@@ -70,9 +72,9 @@ int main(int argc, char **argv) {
 
     while(1) {
         clientlen = sizeof(clientaddr);
-        connfd = Accept(listenfd, (SA*) &clientaddr, &clientlen); // accept
+        connfd = Accept(listenfd, (SA *) &clientaddr, &clientlen); // accept
 
-        Getnameinfo((SA*) &clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
+        Getnameinfo((SA *) &clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
 
         // print connection message
         printf("Accepted connection from (%s %s).\n", hostname, port);
@@ -113,8 +115,9 @@ void doit(int connfd) {
     // Read in client's request line
     sscanf(buf, "%s %s %s", method, uri, version);
 
-    char url_store[0x100];
-    strncpy(url_store, uri, 0x100); // copy original url
+    char url_store[BUF_SIZE + 1];
+    strncpy(url_store, uri, BUF_SIZE); // copy original url
+    url_store[BUF_SIZE] = '\0';
 
     // If not GET method, return
     if(strncasecmp(method, "GET", 3) != 0) return;
@@ -212,63 +215,164 @@ void parse_uri(char *uri, char *hostname, char *path, int *port) {
     *port = 80; // default port is 80
 
     // find hostname
-    char* pos = strstr(uri, "//");
+    char *pos = strstr(uri, "//");
 
     pos = (pos != NULL) ? (pos + 2) : uri;
 
     // does port exist?
-    char* pos2 = strstr(pos, ":");
+    char *pos2 = strstr(pos, ":");
     if(pos2) {
         *pos2 = '\0';
+        sscanf(pos, "%s", hostname); // read hostname
         sscanf(pos2 + 1, "%d%s", port, path); // read port and path
     } else {
         pos2 = strstr(pos, "/"); // path
         if(pos2) {
+            *pos2 = '\0';
+            sscanf(pos, "%s", hostname); // read hostname
             *pos2 = '/';
             sscanf(pos2, "%s", path); // read path
-        }
+        } else sscanf(pos, "%s", hostname);
     }
-    sscanf(pos, "%s", hostname); // read hostname
     return;
 }
 
 // Implement Cache Function
 void cache_init() {
+    cache.num = 0;
+    int i = 0;
+    for(; i < CACHE_ITEMS; ++i) {
+        cache_item *item = &cache.item[i];
+        item -> LRU = 0;       // not recently used
+        item -> isEmpty = 1;   // empty
+        item -> rc = 0;        // read count 0
+        item -> wc = 0;        // write count 0
 
+        // initialize semaphore
+        Sem_init(&item -> wmutex, 0, 1);
+        Sem_init(&item -> rcmutex, 0, 1);
+        Sem_init(&item -> wcmutex, 0, 1);
+        Sem_init(&item -> queue, 0, 1);
+    }
 }
 
 void readLock(int idx) {
+    cache_item *item = &cache.item[idx];
 
+    P(&item -> queue);
+    P(&item -> rcmutex);
+    item -> rc++;
+
+    if(item -> rc == 1)
+        P(&item -> wmutex);
+
+    V(&item -> rcmutex);
+    V(&item -> queue);
 }
 
 void readUnlock(int idx) {
+    cache_item *item = &cache.item[idx];
 
+    P(&item -> rcmutex);
+    item -> rc--;
+
+    if(item -> rc == 0)
+        V(&item -> wmutex);
+
+    V(&item -> rcmutex);
 }
 
 void writeLock(int idx) {
+    cache_item *item = &cache.item[idx];
 
+    P(&item -> wcmutex);
+    item -> wc++;
+
+    if(item -> wc == 1)
+        P(&item -> queue);
+
+    V(&item -> wcmutex);
+    P(&item -> wmutex);
 }
 
 void writeUnlock(int idx) {
+    cache_item *item = &cache.item[idx];
 
+    V(&item -> wmutex);
+    P(&item -> wcmutex);
+    item -> wc--;
+
+    if(item -> wc == 0)
+        V(&item -> queue);
+
+    V(&item -> wcmutex);
 }
 
 // find url in cache
 int cache_find(char *url) {
-    return -1;
+    int i = 0;
+    for(; i < CACHE_ITEMS; ++i) {
+        readLock(i);
+        if((cache.item[i].isEmpty == 0) &&
+           (strncmp(url, cache.item[i].cache_url, BUF_SIZE) == 0)) break;
+        readUnlock(i);
+    }
+
+    if(i >= CACHE_ITEMS) return -1; // Cache miss
+    return i;
 }
 
 // find object to evict
 int cache_evict() {
-    return -1;
+    int min = LRU_MAX;
+    int minidx = 0;
+    int i = 0;
+    for(; i < CACHE_ITEMS; ++i) {
+        readLock(i);
+        cache_item *item = &cache.item[i];
+        if(item -> isEmpty) { // if empty block exists, return it
+            minidx = i;
+            readUnlock(i);
+            break;
+        }
+        if(item -> LRU < cache.item[minidx].LRU) { // smallest LRU
+            minidx = i;
+        }
+        readUnlock(i);
+    }
+
+    return minidx;
 }
 
 // update status of LRU
 void LRU(int idx) {
+    writeLock(idx);
+    cache.item[idx].LRU = LRU_MAX;
+    writeUnlock(idx);
 
+    int i = 0;
+    for(; i < CACHE_ITEMS; ++i) {
+        if(i == idx) continue;
+        writeLock(i);
+        if(!cache.item[i].isEmpty && i != idx) {
+            cache.item[i].LRU--;
+        }
+        writeUnlock(i);
+    }
 }
 
 // cache uri and content in the cache
 void cache_uri(char *uri, char *buf) {
+    int idx = cache_evict();
 
+    writeLock(idx);
+
+    cache_item *item = &cache.item[idx];
+    strcpy(item -> cache_obj, buf);
+    strcpy(item -> cache_url, uri);
+    item -> isEmpty = 0;
+
+    writeUnlock(idx);
+
+    LRU(idx);
 }
