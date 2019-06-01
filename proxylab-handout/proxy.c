@@ -5,6 +5,8 @@
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
 
+#define CACHE_ITEMS 10
+
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
 
@@ -14,6 +16,38 @@ void build_http_header(char *http_header, char *hostname, char *path, int port, 
 int connect_server(char *hostname, int port, char *http_header);
 
 void *thread(void *vargp);
+
+// Cache Functions
+void cache_init();
+int cache_find(char *url);
+int evict();
+void LRU(int idx);
+void cache_uri(char *uri,char *buf);
+void readLock(int idx);
+void readUnlock(int idx);
+void writeLock(int idx);
+void writeUnlock(int idx);
+
+typedef struct {
+    char cache_obj[MAX_OBJECT_SIZE];
+    char cache_url[MAXLINE];
+    int LRU;
+    int isEmpty;
+
+    sem_t wmutex;       // lock access to cache
+    int rc;             // read count
+    sem_t rcmutex;      // lock read count
+    int wc;             // write count
+    sem_t wcmutex;      // lock write count
+    sem_t queue;
+} cache_item;
+
+typedef struct {
+    cache_item item[CACHE_ITEMS];  // 10 blocks
+    int num;
+} Cache;
+
+Cache cache; // Global cache
 
 int main(int argc, char **argv) {
     int listenfd, connfd;
@@ -27,6 +61,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "usage :%s <port> \n", argv[0]);
         exit(1);
     }
+
+    cache_init(); // initialize cache
 
     Signal(SIGPIPE, SIG_IGN); // ignore SIGPIPE
 
@@ -77,8 +113,22 @@ void doit(int connfd) {
     // Read in client's request line
     sscanf(buf, "%s %s %s", method, uri, version);
 
+    char url_store[0x100];
+    strncpy(url_store, uri, 0x100); // copy original url
+
     // If not GET method, return
     if(strncasecmp(method, "GET", 3) != 0) return;
+
+    // Is the uri in cache?
+    int ci; // cache index
+    if((ci = cache_find(url_store)) != -1) {
+        // cache hit
+        readLock(ci);
+        Rio_writen(connfd, cache.item[ci].cache_obj, strlen(cache.item[ci].cache_obj));
+        readUnlock(ci);
+        LRU(ci); // update
+        return;
+    }
 
     // Parse uri and get hostname, path, and port
     parse_uri(uri, hostname, path, &port);
@@ -100,11 +150,18 @@ void doit(int connfd) {
 
     // Receive message from server and send to client
     size_t n;
+    char cbuf[MAX_OBJECT_SIZE]; // buffer to store in cache
+    int buf_size = 0;
     while((n = Rio_readlineb(&server_rio, buf, MAXLINE)) != 0) {
+        buf_size += n;
+        if(buf_size < MAX_OBJECT_SIZE) strncat(cbuf, buf, n); // !
         Rio_writen(connfd, buf, n);
     }
 
     Close(serverfd); // Must close server fd
+
+    // store in cache
+    if(buf_size < MAX_OBJECT_SIZE) cache_uri(url_store, cbuf);
 }
 
 void build_http_header(char *http_header, char *hostname, char *path, int port, rio_t *client_rio) {
@@ -173,4 +230,45 @@ void parse_uri(char *uri, char *hostname, char *path, int *port) {
     }
     sscanf(pos, "%s", hostname); // read hostname
     return;
+}
+
+// Implement Cache Function
+void cache_init() {
+
+}
+
+void readLock(int idx) {
+
+}
+
+void readUnlock(int idx) {
+
+}
+
+void writeLock(int idx) {
+
+}
+
+void writeUnlock(int idx) {
+
+}
+
+// find url in cache
+int cache_find(char *url) {
+    return -1;
+}
+
+// find object to evict
+int cache_evict() {
+    return -1;
+}
+
+// update status of LRU
+void LRU(int idx) {
+
+}
+
+// cache uri and content in the cache
+void cache_uri(char *uri, char *buf) {
+
 }
