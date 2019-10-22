@@ -1,0 +1,514 @@
+%!TEX encoding = utf-8
+\documentclass[12pt]{article}
+\usepackage{kotex}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\geometry{
+	top = 15mm,
+	left = 10mm,
+	right = 10mm,
+	bottom = 15mm
+}
+\geometry{a4paper}
+
+\pagenumbering{gobble}
+\renewcommand{\baselinestretch}{1.2}
+\newcommand{\cname}[1]{\large \textbf{#1}}
+\definecolor{mGreen}{rgb}{0,0.6,0}
+\definecolor{mGray}{rgb}{0.5,0.5,0.5}
+\definecolor{mPurple}{rgb}{0.58,0,0.82}
+\definecolor{backgroundColour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	commentstyle=\color{mGreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{mGray},
+	stringstyle=\color{mPurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	captionpos=b,                    
+	keepspaces=true,                 
+	numbers=left,                    
+	numbersep=-10pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=4,
+	language=C,
+}
+
+\begin{document}{\sffamily
+\begin{center}
+	\textbf{\large 2019 Spring - System Programming Finals}
+\end{center}
+\cname{Concurrent Programming}
+\begin{itemize}
+	\item Hard!
+	\begin{itemize}
+		\item Human mind is sequential, misleading notion of time
+		\item Considering all possibilities of \textbf{interleaving} is impossible
+		\item \textbf{Races}: Outcome depends on arbitrary scheduling decisions
+		\item \textbf{Deadlock}: Improper resource allocation preventing progress, stuck waiting for an event that will never happen
+		\item Livelock, starvation, fairness etc.
+	\end{itemize}
+	\item \textbf{Concurrent Servers}
+	\begin{itemize}
+		\item \textbf{Process}-based: Automatic interleaving by kernel, private address space for each flow
+		\item \textbf{Event}-based: Manual interleaving, shared address space, \textit{I/O multiplexing}
+		\item \textbf{Thread}-based: Automatic interleaving by kernel, shared address space (Mixup)
+	\end{itemize}
+	\item \textbf{Process Based Server}
+	\begin{itemize}
+		\item Separate process for each client (\texttt{fork})
+		\item Must reap all zombie children
+		\item \texttt{accept} process
+		\begin{enumerate}
+			\item Server blocks in \texttt{accept}, waits for connection request on \texttt{listenfd}
+			\item Client makes connection request by \texttt{connect}
+			\item Server returns \texttt{connfd} from \texttt{accept}, \textit{Forks child to handle client}
+			\item Connection between \texttt{clientfd} and \texttt{connfd} is established  
+		\end{enumerate}
+		\item \textit{No shared states between clients}
+		\item Both parent \& child have copies of \texttt{listenfd} and \texttt{connfd}: parent should close \texttt{connfd}, child should close \texttt{listenfd} (considering \texttt{refcnt})
+		\item Pros
+		\begin{itemize}
+			\item Clean sharing model - file tables (o), descriptors/global var.(x)
+			\item Simple and straightforward
+		\end{itemize}
+		\item Cons
+		\begin{itemize}
+			\item Additional overhead for process control
+			\item Hard to share data between processes (IPC)
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Event Based Server}
+	\begin{itemize}
+		\item Maintains a set of active connections by an array of \texttt{connfd}s
+		\item Repeats:
+		\begin{itemize}
+			\item \texttt{select} which descriptors have pending inputs
+			\item If \texttt{listenfd} has input, \texttt{accept} the connection
+			\item Add new \texttt{connfd} to array
+			\item Service all \texttt{connfd}s with pending inputs
+		\end{itemize}
+		\item Pros
+		\begin{itemize}
+			\item One logical control flow and shared address space
+			\item Can single step with debugger
+			\item No process or thread control overhead
+			\item Gives programmers more control over the behavior
+		\end{itemize}
+		\item Cons
+		\begin{itemize}
+			\item Too complex
+			\item Hard to provide fine-grained concurrency
+			\item Cannot take advantage of multi-core (single control)
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Thread}: Logical flow that runs in the context of a process
+	\begin{itemize}
+		\item \textbf{Thread context}: Registers, Condition Codes, Stack Pointer, Program Counter, Thread ID, own stack (for local var)
+		\item Threads share same code, data, and kernel context (VA space)
+		\item Threads $\approx$ pools of concurrent flow that access the same data\footnote{Processes form a tree hierarchy, where threads do not}
+		\item Concurrent if flows overlap in time
+	\end{itemize}
+	\item \textbf{Threads vs. Processes}
+	\begin{itemize}
+		\item Similarities
+		\begin{itemize}
+			\item Own logical control flow
+			\item Can run concurrently with others
+			\item Context switching
+		\end{itemize}
+		\item \textbf{Differences}
+		\begin{itemize}
+			\item Threads share all code and data (except local stacks)
+			\item Threads are less expensive than processes (they have less context)
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Posix Threads} (\texttt{pthreads}) \textbf{Interface}
+	\begin{itemize}
+		\item Standard interface that manipulate threads from C programs
+		\item Creating Threads
+		\begin{itemize}
+			\item \texttt{int pthread\_create(pthread\_t *tid, NULL, func *f, void *arg);}
+			\item \texttt{tid}: contains id of created thread
+			\item \texttt{f}: thread routine
+			\item \texttt{arg}: arguments for \texttt{f}
+		\end{itemize}
+		\item Terminating Threads
+		\begin{itemize}
+			\item \texttt{void pthread\_exit(void *thread\_return);}
+			\item \texttt{int pthread\_cancel(pthread\_t tid);}
+			\item Terminates the thread with \texttt{tid}
+		\end{itemize}
+		\item Reaping Threads
+		\begin{itemize}
+			\item \texttt{int pthread\_join(pthread\_t tid, void **thread\_return);}
+			\item Blocks until thread \texttt{tid} terminates, and reaps terminated thread
+			\item Can only wait for a specific thread
+		\end{itemize}
+		\item Detaching Threads
+		\begin{itemize}
+			\item Joinable thread: Can be reaped and killed by other threads, memory is not freed until reaped.
+			\item Detached thread: Cannot be reaped by other threads, memory is freed automatically on termination
+			\item \texttt{int pthread\_detach(pthread\_t tid);}
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Thread Based Server}
+	\begin{itemize}
+		\item Run only detached threads: reaped automatically
+		\item Free \texttt{vargp}, \texttt{close(connfd)} necessary
+		\item Each client handled by each peer thread
+		\item Careful to avoid unintended sharing (\texttt{malloc})
+		\item Functions in the thread routine must be thread-safe
+		\item Pros
+		\begin{itemize}
+			\item Easy to share data between threads (perhaps too easy)
+			\item Efficient than processes (cheaper context switch)
+		\end{itemize}
+		\item Cons
+		\begin{itemize}
+			\item Unintended sharing
+			\item Difficult to debug
+		\end{itemize}
+	\end{itemize}
+\end{itemize}
+\pagebreak
+
+\cname{Synchronization}
+\begin{itemize}
+	\item \textbf{Threads Memory Model}
+	\begin{itemize}
+		\item Variable shared $\iff$ Multiple threads reference the variable
+		\item Multiple threads run within the context of a single process
+		\item Threads have its own thread context (TID, SP, PC, CC, REG)
+		\item Share the remaining process context
+	\end{itemize}
+	\item \textbf{Variable Instances in Memory}
+	\begin{itemize}
+		\item Global Variables: Exactly one instance
+		\item Local Variables: Each thread stack has one instance each
+		\item Local \textit{Static} Variables: Exactly one instance\footnote{It's similar to global variables, just that its scope is limited to the function}
+	\end{itemize}
+	\item \textbf{Concurrent Execution \& Process Graphs}
+	\begin{itemize}
+		\item Interleaving of any order possible; May cause errors
+		\item \textbf{Process Graph} depicts the discrete \textit{execution state space} of concurrent threads
+		\item Axis: sequential order of instructions in a thread
+		\item Each point: Possible \textit{execution state}
+		\item Trajectory: is a sequence of legal state \textit{transitions} of possible concurrent execution (one set of interleaving)
+		\item \textbf{Critical Section} (w.r.t a shared var): load $\sim$ store instruction
+		\item Instructions in critical section should not be interleaved
+		\item \textbf{Unsafe Region}: Intersection of critical sections
+		\item Trajectory is \textit{safe} $\iff$ does not pass unsafe region
+		\item Enforce \textbf{mutual exclusion} to \textbf{synchronize} the execution of threads so that they can never have an unsafe trajectory
+	\end{itemize}
+	\item \textbf{Semaphores}: Non-negative global integer synchronization variable
+	\begin{itemize}
+		\item Mainpulated by \texttt{P}, \texttt{V} operations
+		\item \texttt{P(s)} (= Lock)
+		\begin{itemize}
+			\item If $s\neq 0$, \texttt{s--} and return (happens atomically)
+			\item If $s=0$, \textbf{suspend} until $s\neq 0$, and the thread is restarted by a \texttt{V} operation
+			\item After restart, \texttt{P} decrements \texttt{s} and returns control to caller
+		\end{itemize}
+		\item \texttt{V(s)} (= Unlock)
+		\begin{itemize}
+			\item \texttt{s++} and return
+			\item If any threads blocked in \texttt{P} are waiting, restart exactly one of those threads,\footnote{You don't know which will be restarted...} which enables \texttt{P} to decrement \texttt{s}.
+		\end{itemize}
+		\item \textbf{Semaphore Invariant}: $s\geq 0$
+	\end{itemize}
+	\item \textbf{Semaphores for Synchronization}
+	\begin{itemize}
+		\item Associate a unique semaphore \textbf{mutex} (initially 1) with each shared var
+		\item Surround corresponding critical sections with \texttt{P}, \texttt{V} operations
+		\item \textit{Binary Semaphores}: Value is 0 or 1
+		\item \textit{Mutex}: Binary semaphores for \textbf{mut}ual \textbf{ex}clusion
+		\item \textit{Counting Semaphore}: Counter for set of available resources
+		\item Synchronization makes programs run slower
+		\item The semaphore invariant surrounds critical sections, which is the \textit{forbidden region}
+		\item Semaphore is $<0$ in the forbidden region, therefore cannot be passed by any trajectory
+	\end{itemize}
+	\item \textbf{Semaphores to Coordinate Access to Shared Resources}
+	\begin{itemize}
+		\item Semaphore operation to notify another thread that some condition has become true
+		\item Use counting semaphores to keep track of resource state
+		\item Mutex for protecting access to the resource
+	\end{itemize}
+	\item \textbf{Producer-Consumer Problem}
+	\begin{itemize}
+		\item They share a bounded buffer with $n$ slots
+		\item Producer produces new items, inserts them to the buffer, notify consumer
+		\item Consumer consumes items, removes them from the buffer, notify producer
+		\item \texttt{sbuf} (shared buffer) package
+		\item \texttt{slots}: counts available slots in the buffer
+		\item \textit{items}: counts available items in the buffer
+	\end{itemize}
+	\item \textbf{Reader-Writers Problem}
+	\begin{itemize}
+		\item Reader threads only read object
+		\item Writer threads modify the object $\rightarrow$ Must have exclusive access
+		\item Unlimited readers can access the object
+		\item \textit{First readers-writers problem} (Reader Favoring)
+		\begin{itemize}
+			\item No reader should be kept waiting if writer doesn't have access
+			\item Reader has priority over writers
+			\item Starvation for writers may happen
+		\end{itemize} 
+		\item \textit{Second readers-writers problem} (Writer Favoring)
+		\begin{itemize}
+			\item Once a writer is ready to write, performs write ASAP
+			\item Readers that arrive after a writer must wait, even if the writer is also waiting
+			\item Starvation for readers may happen
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Prethreaded Concurrent Server}
+	\begin{itemize}
+		\item Creating/reaping thread is expensive! Maintain a set of worker threads!
+		\item Server consists of main thread and a set of worker threads
+		\item Main thread repeatedly accepts connection from clients and places \texttt{connfd} in a bounded buffer
+		\item Each worker thread removes \texttt{connfd} from the buffer, services client and waits for the next descriptor
+	\end{itemize}
+	\item \textbf{Thread Safety}
+	\begin{itemize}
+		\item Functions called in a thread routine must be \textbf{thread safe}
+		\item Thread Safe $\iff$ Always produces correct results when called repeatedly from multiple concurrent threads
+		\item Classes of unsafe functions
+		\begin{enumerate}
+			\item Functions that do not protect \textit{shared variables}
+			\begin{itemize}
+				\item Use \texttt{P}, \texttt{V} operations to synchronize
+			\end{itemize}
+			\item Functions that keep \textit{states across multiple invocations}
+			\begin{itemize}
+				\item Modify function to be \textit{re-entrant}
+			\end{itemize}
+			\item Functions that return a \textit{pointer to a static variable}
+			\begin{itemize}
+				\item Rewrite function so caller passes address of variable to store result
+				\item Lock and copy: Lock and copy to a another private memory location to store the result (write a wrapper function)
+			\end{itemize}
+			\item Functions that call other unsafe functions
+			\begin{itemize}
+				\item Just don't call them
+			\end{itemize}
+		\end{enumerate}
+	\end{itemize}	
+	\item \textbf{Reentrancy}
+	\begin{itemize}
+		\item Function is \textbf{reentrant} $\iff$ Does not access shared variables when called by multiple threads
+		\item Requires no synchronization process (which is expensive)
+	\end{itemize}
+	\item \textbf{Race Conditions}
+	\begin{itemize}
+		\item Race when the correctness of program depends on on thread reaching point $ x $ before another thread reaches $ y $
+		\item Happens usually when programmer assumes some particular trajectory
+		\item Avoid unintended sharing to prevent races
+	\end{itemize}
+	\item \textbf{Deadlocks}
+	\begin{itemize}
+		\item Deadlock $\iff$ Waiting for a condition that will never be true
+		\item \texttt{P} operation is a potential problem because it blocks
+		\item Trajectory entering deadlock region will reach deadlock state
+		\item Often non-deterministic
+		\item Fix: Acquire shared resources in the same order
+	\end{itemize}
+\end{itemize}
+
+\pagebreak
+
+\cname{Thread-Level Parallelism}
+\begin{itemize}
+	\item Multicore/Hyperthreaded CPUs offer another opportunity
+	\begin{itemize}
+		\item Spread work over threads executing in parallel
+		\item Happens automatically, if many independent tasks
+		\item Write code to make one big task go faster
+	\end{itemize}
+	\item Out-of-Order Processor Structure
+	\begin{itemize}
+		\item Instruction control dynamically converts program into stream of operations
+		\item Mapped onto functional units to execute in parallel
+	\end{itemize}
+	\item Hyperthreading Implementation
+	\begin{itemize}
+		\item Replicate enough instruction control to process $K$ instruction streams
+		\item $K$ copies of all registers, share functional units
+	\end{itemize}
+	\item Summation Example
+	\begin{itemize}
+		\item \texttt{psum-mutex}: Takes too long! \texttt{P}, \texttt{V} operations are expensive
+		\item \texttt{psum-array}: Peer thread \texttt{i} sums into global array element \texttt{psum[i]}. Eliminates need for mutex synchronization
+		\item \texttt{psum-local}: Reduce memory references. Sum into a local variable.
+	\end{itemize}
+	\item Characterizing Parallel Performance
+	\begin{itemize}
+		\item $p$ processor cores, $T_k$ is the running time using $k$ cores
+		\item \textbf{Speedup}: $S_p = T_1 / T_p$
+		\begin{itemize}
+			\item \textit{Relative Speedup} if $T_1$ is run time of parallel ver. of the code on 1 core
+			\item \textit{Absolute Speedup} if $T_1$ is run time of sequential ver. of the code on 1 core
+		\end{itemize}
+		\item \textbf{Efficiency}: $E_p = S_p/p = \frac{T_1}{pT_p}$
+		\begin{itemize}
+			\item Measures the overhead due to parallelization
+		\end{itemize}
+	\end{itemize}
+	\item \textbf{Amdahl's Law}: Captures difficulty of using parallelism to speed things up
+	\begin{itemize}
+		\item $T$: Total sequential time required
+		\item $p$: Fraction of total that can be sped up $(0\leq p\leq 1)$
+		\item $k$: Speedup factor
+		\item Resulting performance
+		$$T_k = p\frac{T}{k} + (1-p)T \implies S_p = \frac{T}{pT/k + (1-p)T} = \frac{1}{1-p + \frac{p}{k}}$$
+		\item Least possible running time: $k=\infty \implies T_\infty = (1-p)T$
+	\end{itemize}
+	\item Snoopy Caches
+	\begin{itemize}
+		\item Write-back caches, without coordination between them may cause problems...!
+		\item Tag each cache block with states
+		\begin{itemize}
+			\item \texttt{I}: Invalid - Cannot use value
+			\item \texttt{S}: Shared - Readable copy
+			\item \texttt{E}: Exclusive - Writeable copy
+		\end{itemize}
+		\item When cache sees request for one of its \texttt{E} tagged blocks: Supply value from cache and set tag to \texttt{S}
+	\end{itemize}
+\end{itemize}
+
+\pagebreak
+\cname{Spin Locks and Contention}
+\begin{itemize}
+	\item Kinds of Architectures
+	\begin{itemize}
+		\item SISD (Single Instruction Single Data - Uniprocessor)
+		\begin{itemize}
+			\item Single instruction stream
+			\item Single data stream
+		\end{itemize}
+		\item SIMD (Single Instruction Multiple Data - Vector)
+		\item MIMD (Multiple Instruction Multiple Data - Multiprocessors)
+	\end{itemize}
+	\item Spin Lock
+	\begin{itemize}
+		\item Lock which causes a thread to acquire it to simply wait in a loop while repeatedly checking if the lock is available.
+		\item Thread is active but does not perform any useful task (busy waiting)
+	\end{itemize}
+	\item Test-and-Set
+	\begin{itemize}
+		\item Instruction used to write 1 (true) to a memory location and return its old value as a single atomic operation
+		\item No other process may begin another test-and-set until the first process's test-and-set is finished
+		\item Can reset by writing 0 (false)
+		\item Lock is free is value is false
+		\item Lock is taken if value is true
+		\item Release lock by writing false
+	\end{itemize}
+	\item Test-and-Test-and-Set Locks
+	\begin{itemize}
+		\item Lurking stage
+		\begin{itemize}
+			\item Wait until lock looks free
+			\item Spin while read returns true (lock is taken)
+		\end{itemize}
+		\item Pouncing State
+		\begin{itemize}
+			\item As soon as lock looks available
+			\item Read returns false (lock is free)
+			\item Call TAS to acquire lock
+			\item If TAS loses, back to lurking
+		\end{itemize}
+		\item Mystery
+		\begin{itemize}
+			\item Both TAS and TTAS do the same thing (in our model)
+			\item Except that TTAS performs much better than TAS
+			\item Neither approaches ideal
+		\end{itemize}
+		\item Write-Back Caches
+		\begin{itemize}
+			\item Accumulate changes in cache
+			\item Write back when needed - need the cache for sth else, another processor wants it
+			\item On first modification - invalidate other entries, requires non-trivial protocol
+			\item Three States
+			\begin{itemize}
+				\item Invalid: Contains raw bits
+				\item Valid: I can read but I can't write
+				\item Dirty: Data has been modified - Intercept other load requests and write back to memory before using cache
+			\end{itemize}
+		\end{itemize}
+		\item Why does \texttt{TASLock} perform so poorly?
+		\begin{itemize}
+			\item Because all threads
+			must use the bus to communicate with memory, these \texttt{getAndSet()} calls delay
+			all threads, even those not waiting for the lock
+			\item \texttt{getAndSet()} call forces other processors to discard their own cached copies of the lock, so every spinning thread encounters a cache miss almost every time, and must use the bus to fetch the new, but unchanged value
+			\item When the thread holding the lock tries to release it, it may be delayed because the bus is monopolized by the spinners
+		\end{itemize}
+		\item \texttt{TTASLock} algorithm
+		\begin{itemize}
+			\item Lock is held by a thread A. The first time thread B reads the lock it takes a cache miss, forcing B to block while the value is loaded into B’s cache
+			\item As long as A holds the lock, B repeatedly rereads the value, but hits in the cache every time. 
+			\item B thus produces no bus traffic, and does not slow down other threads’ memory accesses.
+			\item Moreover, a thread that releases a lock is not delayed by threads spinning on that lock
+			\item \textit{When the lock is released}
+			\item The lock holder releases the lock by writing false to the lock variable, which immediately invalidates the spinners’ cached copies
+			\item The first to succeed invalidates the others, who must then reread the value,
+			causing a storm of bus traffic. Eventually, the threads settle down once again to
+			local spinning
+		\end{itemize}
+		\item \textit{local spinning}, where threads repeatedly reread cached values
+		instead of repeatedly using the bus, is an important principle critical to the design
+		of efficient spin locks
+		\item \textbf{contention} occurs when multiple threads try to acquire a lock at the same time
+		\item Backoff
+		\begin{itemize}
+			\item more effective for the thread to back off for some duration, giving competing threads a chance to finish
+			\item Easy to implement, Beats TTAS lock
+			\item Must choose params. carefully, not portable
+		\end{itemize}
+		\item Anderson Queue Lock
+		\begin{itemize}
+			\item Shorter handover than backoff
+			\item FIFO fairness
+			\item First truly scalable lock
+			\item Simple, easy to implement
+			\item Space hog, One bit per thread
+		\end{itemize}
+		\item CLH Lock
+		\begin{itemize}
+			\item FIFO order, No starvation
+			\item Small, constant size overhead per thread
+			\item Lock release affects predecessor only
+			\item Small, constant sized space
+			\item But doesn't work for uncached NUMA architectures
+			\item Each thread spin's on predecessor's memory
+			\item Could be far away...
+		\end{itemize}
+		\begin{itemize}
+			\item $L$: number of locks
+			\item $N$: number of threads
+			\item ALock: $O(LN)$, CLH: $O(L+N)$ 		
+		\end{itemize}
+		\item NUMA Architectures
+		\begin{itemize}
+			\item Non-Uniform Memory Architecture
+			\item Illusion: flat shared memory
+			\item Truth: No caches, some memory regions faster than others
+		\end{itemize}
+		\item MCS lock
+		\begin{itemize}
+			\item FIFO order
+			\item Spin on local memory only
+			\item Small, constant size overhead
+		\end{itemize}
+	\end{itemize}
+	
+\end{itemize}
+
+}\end{document}

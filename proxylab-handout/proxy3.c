@@ -32,7 +32,7 @@ void writeUnlock(int idx);
 
 typedef struct {
     char cache_obj[MAX_OBJECT_SIZE];
-    char cache_url[MAX_OBJECT_SIZE];
+    char cache_url[MAXLINE];
     int LRU;
     int isEmpty;
 
@@ -54,7 +54,7 @@ Cache cache; // Global cache
 int main(int argc, char **argv) {
     int listenfd, connfd;
     socklen_t clientlen;
-    char hostname[MAX_OBJECT_SIZE], port[MAX_OBJECT_SIZE];
+    char hostname[MAXLINE], port[MAXLINE];
     struct sockaddr_storage clientaddr;
 
     pthread_t tid; // thread id for concurrency
@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
         clientlen = sizeof(clientaddr);
         connfd = Accept(listenfd, (SA *) &clientaddr, &clientlen); // accept
 
-        Getnameinfo((SA *) &clientaddr, clientlen, hostname, MAX_OBJECT_SIZE, port, MAX_OBJECT_SIZE, 0);
+        Getnameinfo((SA *) &clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
 
         // print connection message
         printf("Accepted connection from (%s %s).\n", hostname, port);
@@ -99,11 +99,11 @@ void *thread(void *vargp) {
 void doit(int connfd) {
     int serverfd; // server file descriptor
 
-    char buf[MAX_OBJECT_SIZE], method[MAX_OBJECT_SIZE], uri[MAX_OBJECT_SIZE], version[MAX_OBJECT_SIZE];
-    char server_http_hdr[MAX_OBJECT_SIZE];
+    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+    char server_http_hdr[MAXLINE];
 
     // Arguments for requests
-    char hostname[MAX_OBJECT_SIZE], path[MAX_OBJECT_SIZE];
+    char hostname[MAXLINE], path[MAXLINE];
     int port;
 
     // Use robust io
@@ -168,7 +168,7 @@ void doit(int connfd) {
 }
 
 void build_http_header(char *http_header, char *hostname, char *path, int port, rio_t *client_rio) {
-    char buf[MAX_OBJECT_SIZE], request_hdr[MAX_OBJECT_SIZE], other_hdr[MAX_OBJECT_SIZE], host_hdr[MAX_OBJECT_SIZE];
+    char buf[MAXLINE], request_hdr[MAXLINE], other_hdr[MAXLINE], host_hdr[MAXLINE];
 
     // Print request line to request header
     sprintf(request_hdr, "GET %s HTTP/1.0\r\n", path);
@@ -223,17 +223,15 @@ void parse_uri(char *uri, char *hostname, char *path, int *port) {
     char *pos2 = strstr(pos, ":");
     if(pos2) {
         *pos2 = '\0';
-        sscanf(pos, "%s", hostname); // read hostname
         sscanf(pos2 + 1, "%d%s", port, path); // read port and path
     } else {
         pos2 = strstr(pos, "/"); // path
         if(pos2) {
-            *pos2 = '\0';
-            sscanf(pos, "%s", hostname); // read hostname
             *pos2 = '/';
             sscanf(pos2, "%s", path); // read path
-        } else sscanf(pos, "%s", hostname);
+        }
     }
+    sscanf(pos, "%s", hostname); // read hostname
     return;
 }
 
@@ -314,10 +312,7 @@ int cache_find(char *url) {
     for(; i < CACHE_ITEMS; ++i) {
         readLock(i);
         if((cache.item[i].isEmpty == 0) &&
-           (strncmp(url, cache.item[i].cache_url, BUF_SIZE) == 0)) {
-               readUnlock(i);
-               break;
-           }
+           (strncmp(url, cache.item[i].cache_url, BUF_SIZE) == 0)) break;
         readUnlock(i);
     }
 
@@ -327,6 +322,7 @@ int cache_find(char *url) {
 
 // find object to evict
 int cache_evict() {
+    int min = LRU_MAX;
     int minidx = 0;
     int i = 0;
     for(; i < CACHE_ITEMS; ++i) {

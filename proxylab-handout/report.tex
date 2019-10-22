@@ -1,0 +1,72 @@
+%!TEX encoding = utf-8
+\documentclass[12pt]{report}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\geometry{
+	top = 25mm,
+	left = 20mm,
+	right = 20mm,
+	bottom = 20mm
+}
+\geometry{a4paper}
+
+\pagenumbering{gobble}
+\renewcommand{\baselinestretch}{1.3}
+
+\definecolor{mGreen}{rgb}{0,0.6,0}
+\definecolor{mGray}{rgb}{0.5,0.5,0.5}
+\definecolor{mPurple}{rgb}{0.58,0,0.82}
+\definecolor{backgroundColour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	commentstyle=\color{mGreen},
+	keywordstyle=\color{mPurple},
+	numberstyle=\tiny\color{mGray},
+	stringstyle=\color{mGreen},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	captionpos=b,                    
+	keepspaces=true,                 
+	numbers=left,                    
+	numbersep=10pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=4,
+	language=C,
+}
+
+\begin{document}
+\begin{center}
+\textbf{\Large System Programming - Proxy Lab Report}\\
+\large 2019 Spring, 2017-18570 Sungchan Yi
+\end{center}
+\subsection*{1. Proxy Lab}
+In this assignment, we write a simple HTTP proxy that caches web objects. Our objective in this assignment is to set up the proxy to accept incoming connections, read/parse requests, forward requests to web servers, read responses, forward responses to the corresponding clients. We learn about basic HTTP operation and how to use sockets to write programs communicating over the network. Also, upgrade the proxy to handle multiple concurrent connections, and learn about concurrency. Finally, add cache to the proxy to speed up the request handling.
+\subsection*{2. Implementation}
+The implementation details are in the comments.
+\subsubsection*{Part 1: Sequential Web Proxy}
+For this part, implement a sequential proxy that handles GET requests. The proxy listens for connection on a port number given in \texttt{argv[1]}. After accepting the connection, read the request from the client, parse the request. Then determine if the client sent a valid request. Then, the proxy will establish its own connection to the appropriate web server and request the object that the client specified, which will be forwarded to the client.
+\subsubsection*{Part 2: Concurrent Proxy}
+After part 1, we upgrade the program and implement concurrent request handling for the proxy. To implement this, we simply create a new thread each time a connection is established. To avoid memory leaks, we detach the thread and make it run. This part could be done almost immediately after part 1; there's nothing much to modify.
+\subsubsection*{Part 3: Caching Web Objects}
+A proxy would be inefficient if it had to make requests to the actual server every time a client asked for it. Instead, the proxy will cache web content inside its own cache, and speed up the forwarding process.\\
+For this lab, we cache web contents in memory and transmit it to the client. Moreover, huge amount of data will not be cached (Specifically, contents of size larger than the maximum cache size will not be cached) and we adopt a LRU replacement policy to control the cache.\\
+Lastly, we have to consider synchronization. Since our proxy is concurrent we should consider the fact that read/writes to the cache should not be interrupted by other threads. So we use semaphores (mutex) to control this and prevent the proxy from sending or writing incorrect information. Also, the assignment requires us to prefer the readers. Only one thread should be allowed to write to the cache, but readers can read from the cache anytime if no writer is writing to it.
+\subsubsection{Testing}
+For testing the proxy, run the proxy by
+
+\texttt{\$ ./proxy 15213}\\
+and test the output for some url through
+
+\texttt{\$ curl --proxy localhost:15213 http://www.snu.ac.kr/index.html}\\
+The result will be compared to
+
+\texttt{\$ curl http://www.snu.ac.kr/index.html}
+\subsection*{3. Conclusion}
+Through this lab, we wrote a proxy that can handle concurrent requests and cache requests for future uses. This was personally the most interesting assignment. Although considering the concurrency for the reader favoring cache was quite difficult, it seems ok. I think I might want to work more on this if I have the time. (implement POST etc.)
+
+\end{document}

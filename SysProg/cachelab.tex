@@ -1,0 +1,96 @@
+%!TEX encoding = utf-8
+\documentclass[12pt]{report}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\geometry{
+	top = 25mm,
+	left = 20mm,
+	right = 20mm,
+	bottom = 20mm
+}
+\geometry{a4paper}
+
+\pagenumbering{gobble}
+\renewcommand{\baselinestretch}{1.3}
+
+\definecolor{mGreen}{rgb}{0,0.6,0}
+\definecolor{mGray}{rgb}{0.5,0.5,0.5}
+\definecolor{mPurple}{rgb}{0.58,0,0.82}
+\definecolor{backgroundColour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	commentstyle=\color{mGreen},
+	keywordstyle=\color{mPurple},
+	numberstyle=\tiny\color{mGray},
+	stringstyle=\color{mGreen},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	captionpos=b,                    
+	keepspaces=true,                 
+	numbers=left,                    
+	numbersep=10pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=4,
+	language=C,
+}
+
+\begin{document}
+\begin{center}
+\textbf{\Large System Programming - Cache Lab Report}\\
+\large 2019 Spring, 2017-18570 Sungchan Yi
+\end{center}
+\subsection*{1. Cache Lab}
+In this assignment, we implement cache system to understand the effectiveness of cache memories. Cache memories can have great impact on performance of C programs, which is of great importance when optimizing certain algorithms and procedures while programming. In the first part, we write a C program that will simulate the behavior of a cache memory. Secondly, we optimize a matrix transpose procedure by minimizing cache misses and improve performance.
+
+\subsection*{2. Implementation}
+\subsubsection*{Part 1 : Cache Simulator}
+For Part 1, we write a cache simulator. This simulator takes \texttt{valgrind} memory trace and simulates the behavior of the cache memory on the given trace. It will give information about whether the cache hit, missed, or eviction occurred.\\
+First create a struct that contains the parameters for the cache, cache lines, sets.
+\begin{lstlisting}[style=Cstyle]
+typedef unsigned long long memAddress; // hold memory addresses
+typedef struct {
+	int s; // bits needed to represent S = 2 ** s
+	int b; // B = 2 ** b
+	int E; // Cache lines per set
+	int S; // Number of sets
+	int B; // Cache line block size in bytes
+	int hits;
+	int misses;
+	int evicts;
+} cache_param;
+
+// Need valid bit, tag bit, and data. Count accesses for removing policy
+typedef struct {
+	int valid;
+	int access; // counts accesses
+	memAddress tag;
+	char* block;
+} cache_line;
+
+// each set will hold lines
+typedef struct {
+	cache_line *lines;
+} cache_set;
+
+// Think cache as an array of sets
+typedef struct {
+	cache_set *sets;
+} cache;
+\end{lstlisting}~\\
+Setting up is the hardest part, the rest is pretty straightforward. Parse arguments using \texttt{getopt} function, create cache, read trace file, simulate each operation, and lastly print summary of hits/misses/evictions.\\
+Be careful when implementing LRU eviction policy.
+
+\subsubsection*{Part 2 : Matrix Transpose}
+At first I tried several general methods for simulating matrix transpose. But none of them gave full marks. So I changed my mind and implemented a program specific for the inputs of \texttt{driver.py}.\\
+For $32\times 32$ cases, I used a divide and conquer method to transpose each portion of the matrix. I tried many numbers for choosing the optimal size for the subproblem, and 8 was the best I got.\\
+For $64\times 64$, I choose the subproblem size as 8 since the block size is 32 bytes. Also I used a technique I learned in Computer Architecture class, which is loop unrolling.\\
+For the rest of the cases, I just found an optimal size for the subproblem by brute force. And it turned out to work quite well.
+
+\subsection*{3. Conclusion}
+Through this lab, I learned about how caches can affect program performance. From this day, I think I will remember this lab, and try to write cache friendly code, if possible. Also, this was a good chance to review what I learned in Computer Architecture class. 
+\end{document}
